@@ -7,6 +7,8 @@ Lightweight authentication microservice for ShopNova - OTP via SMTP, JWT access 
 Endpoints
 
 - `POST /auth/register` — send registration OTP
+- `POST /auth/upload-avatar` — upload avatar image and receive an `avatarUrl`
+- `POST /auth/register` — send registration OTP (can include `avatarUrl`)
 - `POST /auth/register/verify` — verify OTP and create account
 - `POST /auth/login` — login, returns `accessToken` + `refreshToken`
 - `POST /auth/refresh` — exchange refresh token for new access token
@@ -34,13 +36,20 @@ REDIS_HOST=redis-cache
 REDIS_PORT=6379
 REDIS_PASSWORD=
 
-# Database (MySQL / RDS)
-DB_HOST=mysql
-DB_PORT=3306
+# Shared AWS RDS variables (project-level)
+RDS_HOST=your-rds-endpoint.ap-southeast-1.rds.amazonaws.com
+RDS_PORT=3306
+RDS_USER=admin
+RDS_PASSWORD=your_rds_password
+RDS_SSL=true
+
+# Database mapping for auth-service
+DB_HOST=${RDS_HOST}
+DB_PORT=${RDS_PORT}
 DB_NAME=authdb
-DB_USER=root
-DB_PASSWORD=password
-DB_SSL=false
+DB_USER=${RDS_USER}
+DB_PASSWORD=${RDS_PASSWORD}
+DB_SSL=${RDS_SSL}
 
 # SMTP (Gmail: use App Password when using Gmail)
 SMTP_HOST=smtp.gmail.com
@@ -78,7 +87,8 @@ Run with Docker (build + run):
 docker build -t auth-service:latest .
 docker run --rm -p 3001:3001 \
   -e JWT_SECRET=your_jwt_secret_here \
-  -e DB_HOST=mysql -e DB_PORT=3306 -e DB_NAME=authdb -e DB_USER=root -e DB_PASSWORD=secret \
+  -e RDS_HOST=your-rds-endpoint.ap-southeast-1.rds.amazonaws.com -e RDS_PORT=3306 -e RDS_USER=admin -e RDS_PASSWORD=your_rds_password -e RDS_SSL=true \
+  -e DB_HOST=your-rds-endpoint.ap-southeast-1.rds.amazonaws.com -e DB_PORT=3306 -e DB_NAME=authdb -e DB_USER=admin -e DB_PASSWORD=your_rds_password -e DB_SSL=true \
   -e REDIS_HOST=redis-cache -e REDIS_PORT=6379 \
   -e SMTP_HOST=smtp.gmail.com -e SMTP_PORT=587 -e SMTP_USER=you@gmail.com -e SMTP_PASS=app_password \
   auth-service:latest
@@ -148,6 +158,22 @@ curl -X POST http://localhost:3001/auth/password/reset \
   -d '{"email":"alice@example.com","otp":"123456","newPassword":"NewP@ssw0rd"}'
 ```
 
+- Upload avatar image
+
+```bash
+curl -X POST http://localhost:3001/auth/upload-avatar \
+  -H 'Content-Type: multipart/form-data' \
+  -F 'avatar=@/path/to/avatar.jpg'
+```
+
+- Register with optional avatar URL
+
+```bash
+curl -X POST http://localhost:3001/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"fullName":"Alice","email":"alice@example.com","password":"P@ssw0rd!","avatarUrl":"http://localhost:3001/uploads/avatars/avatar-123.png"}'
+```
+
 - Verify token (internal — API Gateway)
 
 ```bash
@@ -155,6 +181,17 @@ curl -X POST http://localhost:3001/auth/verify \
   -H 'Content-Type: application/json' \
   -d '{"token":"<ACCESS_TOKEN>"}'
 ```
+
+## Database changes
+
+Add the new avatar URL column to the `users` table:
+
+```sql
+ALTER TABLE users
+ADD COLUMN avatar_url VARCHAR(512) NULL AFTER full_name;
+```
+
+Store only the image URL in the database, and save the uploaded file under `uploads/avatars/` in the auth service.
 
 ## Notes & operational guidance
 

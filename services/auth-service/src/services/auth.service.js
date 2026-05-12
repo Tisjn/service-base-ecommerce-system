@@ -48,6 +48,7 @@ async function login({ email, password }) {
       id: user.id,
       email: user.email,
       role: user.role,
+      avatarUrl: user.avatarUrl || null,
     },
   };
 }

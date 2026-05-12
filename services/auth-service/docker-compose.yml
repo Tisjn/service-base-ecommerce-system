@@ -1,55 +1,176 @@
+# Phiên bản syntax của Docker Compose
 version: "3.8"
 
 services:
+  # =========================
+  # Redis Service
+  # =========================
   redis-cache:
+    # Dùng image Redis version 7 chạy trên Alpine Linux (nhẹ hơn)
     image: redis:7-alpine
+
+    # Đặt tên container
     container_name: redis-cache
+
+    # Mapping port:
+    # Máy thật:6379 -> Container:6379
     ports:
       - "6379:6379"
+
+    # Gắn volume để lưu dữ liệu Redis
+    #
+    # redis_data = vùng lưu trữ thật trên máy
+    # /data = thư mục bên trong container Redis
+    #
+    # Giúp dữ liệu không mất khi xóa container
     volumes:
       - redis_data:/data
+
+    # Chạy Redis với chế độ appendonly
+    #
+    # appendonly yes:
+    # Redis sẽ ghi dữ liệu xuống disk
+    # giúp hạn chế mất dữ liệu
     command: redis-server --appendonly yes
+
+    # Cho container tham gia network app-network
     networks:
       - app-network
+
+    # Healthcheck kiểm tra Redis còn sống không
     healthcheck:
+      # Docker sẽ chạy lệnh:
+      # redis-cli ping
+      #
+      # Nếu Redis hoạt động:
+      # sẽ trả về PONG
       test: ["CMD", "redis-cli", "ping"]
+
+      # Cứ mỗi 5 giây kiểm tra 1 lần
       interval: 5s
+
+      # Quá 3 giây không phản hồi thì fail
       timeout: 3s
+
+      # Fail 5 lần thì đánh dấu unhealthy
       retries: 5
 
+  # =========================
+  # Auth Service
+  # =========================
   auth-service:
+    # Build image từ Dockerfile ở thư mục hiện tại
     build: .
+
+    # Đặt tên container
     container_name: auth-service
+
+    # Mapping port:
+    # Máy thật:3001 -> Container:3001
     ports:
       - "3001:3001"
+
+    # Chỉ chạy auth-service khi Redis healthy
     depends_on:
       redis-cache:
         condition: service_healthy
+
+    # Tham gia cùng network với Redis
     networks:
       - app-network
+
+    # Biến môi trường cho ứng dụng
     environment:
+      # Port app NodeJS chạy
       - PORT=3001
+
+      # Secret dùng để ký JWT token
+      #
+      # Nếu máy có JWT_SECRET thì dùng
+      # Nếu không thì dùng giá trị mặc định phía sau :-
       - JWT_SECRET=${JWT_SECRET:-0a8e7a473e35d1080204701f57ba0cb86641689c11998b16662f96be329c2ac3}
+
+      # =========================
+      # MySQL Database Config
+      # =========================
+
+      # Địa chỉ MySQL AWS RDS
       - DB_HOST=database-1-instance-1.cvwyy4mmuaiw.ap-southeast-1.rds.amazonaws.com
+
+      # Port MySQL
       - DB_PORT=3306
+
+      # Tên database
       - DB_NAME=ecommerce_data
+
+      # Username MySQL
       - DB_USER=admin
+
+      # Password MySQL
       - DB_PASSWORD=Tinle091104
+
+      # Có dùng SSL hay không
       - DB_SSL=false
+
+      # =========================
+      # Redis Config
+      # =========================
+
+      # Host Redis
+      #
+      # redis-cache chính là tên service Redis
+      # trong Docker network
       - REDIS_HOST=redis-cache
+
+      # Port Redis
       - REDIS_PORT=6379
+
+      # =========================
+      # SMTP Email Config
+      # =========================
+
+      # SMTP Gmail server
       - SMTP_HOST=smtp.gmail.com
+
+      # Port SMTP Gmail
       - SMTP_PORT=587
+
+      # Có dùng SSL không
       - SMTP_SECURE=false
+
+      # Email gửi OTP
       - SMTP_USER=lehuuphuc6573@gmail.com
+
+      # App password Gmail
       - SMTP_PASS=tajpyxzkgyytcrkh
+
+      # =========================
+      # OTP Config
+      # =========================
+
+      # OTP sống trong 300 giây = 5 phút
       - OTP_TTL_SECONDS=300
+
+      # OTP nhập sai tối đa 3 lần
       - OTP_MAX_ATTEMPTS=3
+
+    # Nếu container crash sẽ tự restart
+    # Trừ khi user stop thủ công
     restart: unless-stopped
 
+# =========================
+# Docker Volumes
+# =========================
 volumes:
+  # Volume lưu dữ liệu Redis thật
   redis_data:
 
+# =========================
+# Docker Networks
+# =========================
 networks:
+  # Tạo network tên app-network
   app-network:
+    # Bridge network:
+    # giống mạng LAN mini giữa các container
     driver: bridge

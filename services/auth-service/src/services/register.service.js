@@ -10,7 +10,7 @@ function normalizeEmail(email) {
   return String(email).trim().toLowerCase();
 }
 
-async function sendRegisterOtp({ email, password, fullName }) {
+async function sendRegisterOtp({ email, password, fullName, avatarUrl }) {
   const normalizedEmail = normalizeEmail(email);
   const existingUser = await userRepository.findByEmail(normalizedEmail);
 
@@ -27,6 +27,7 @@ async function sendRegisterOtp({ email, password, fullName }) {
       otp,
       hashedPassword,
       fullName: String(fullName).trim(),
+      avatarUrl: avatarUrl ? String(avatarUrl).trim() : null,
       attempts: 0,
     },
     env.otp.ttlSeconds,
@@ -77,6 +78,7 @@ async function verifyRegisterOtp({ email, otp }) {
     email: normalizedEmail,
     password: otpData.hashedPassword,
     fullName: otpData.fullName,
+    avatarUrl: otpData.avatarUrl || null,
     role: "customer",
     status: "active",
   });

@@ -43,9 +43,9 @@ public PaymentResult mockCharge(BigDecimal amount, String method) {
 
 ```env
 PORT=3005
-SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/paymentdb
-SPRING_DATASOURCE_USERNAME=root
-SPRING_DATASOURCE_PASSWORD=password
+SPRING_DATASOURCE_URL=jdbc:mysql://your-rds-endpoint.ap-southeast-1.rds.amazonaws.com:3306/paymentdb?useSSL=true&requireSSL=true
+SPRING_DATASOURCE_USERNAME=admin
+SPRING_DATASOURCE_PASSWORD=your_rds_password
 PAYMENT_GATEWAY_URL=https://mock-gateway.internal
 WEBHOOK_SECRET=webhook_hmac_secret
 ORDER_SERVICE_URL=http://order-service:3004

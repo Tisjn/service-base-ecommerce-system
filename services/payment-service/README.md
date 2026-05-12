@@ -24,9 +24,15 @@
 
 ```env
 PORT=3005
-SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/paymentdb
-SPRING_DATASOURCE_USERNAME=root
-SPRING_DATASOURCE_PASSWORD=password
+RDS_HOST=your-rds-endpoint.ap-southeast-1.rds.amazonaws.com
+RDS_PORT=3306
+RDS_USER=admin
+RDS_PASSWORD=your_rds_password
+RDS_SSL=true
+
+SPRING_DATASOURCE_URL=jdbc:mysql://${RDS_HOST}:${RDS_PORT}/paymentdb?useSSL=${RDS_SSL}&requireSSL=${RDS_SSL}
+SPRING_DATASOURCE_USERNAME=${RDS_USER}
+SPRING_DATASOURCE_PASSWORD=${RDS_PASSWORD}
 PAYMENT_GATEWAY_URL=https://mock-gateway.internal
 WEBHOOK_SECRET=webhook_hmac_secret
 ORDER_SERVICE_URL=http://order-service:3004

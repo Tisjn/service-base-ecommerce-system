@@ -22,11 +22,11 @@ async function sendOtpEmail(to, otp, type = "register", fullName = "") {
   const isRegister = type === "register";
 
   await transporter.sendMail({
-    from: `"ShopNova" <${env.smtp.user}>`,
+    from: `"DTPShop" <${env.smtp.user}>`,
     to,
     subject: isRegister
-      ? "[ShopNova] Xác minh tài khoản của bạn"
-      : "[ShopNova] Yêu cầu đặt lại mật khẩu",
+      ? "[DTPShop] Xác minh tài khoản của bạn"
+      : "[DTPShop] Yêu cầu đặt lại mật khẩu",
     html: isRegister
       ? buildRegisterTemplate(fullName || "bạn", otp)
       : buildResetTemplate(otp),

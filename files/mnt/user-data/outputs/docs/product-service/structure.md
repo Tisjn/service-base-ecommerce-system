@@ -42,15 +42,15 @@ src/
 
 ## API Endpoints
 
-| Method | Path                  | Auth     | Mô tả              |
-| ------ | --------------------- | -------- | ------------------ |
-| GET    | `/products`           | Public   | Danh sách sản phẩm |
-| GET    | `/products/:id`       | Public   | Chi tiết sản phẩm  |
-| POST   | `/products`           | Admin    | Tạo sản phẩm mới   |
-| PATCH  | `/products/:id`       | Admin    | Cập nhật sản phẩm  |
-| DELETE | `/products/:id`       | Admin    | Soft delete        |
-| PATCH  | `/products/:id/stock` | Internal | Cập nhật tồn kho   |
-| GET    | `/categories`         | Public   | Danh sách danh mục |
+| Method | Path                  | Auth     | Mô tả                                         |
+| ------ | --------------------- | -------- | --------------------------------------------- |
+| GET    | `/products`           | Public   | Danh sách sản phẩm                            |
+| GET    | `/products/:id`       | Public   | Chi tiết sản phẩm                             |
+| POST   | `/products`           | Admin    | Tạo sản phẩm mới                              |
+| PATCH  | `/products/:id`       | Admin    | Cập nhật sản phẩm                             |
+| DELETE | `/products/:id`       | Admin    | Soft delete (chỉ khi chưa phát sinh đơn hàng) |
+| PATCH  | `/products/:id/stock` | Internal | Cập nhật tồn kho                              |
+| GET    | `/categories`         | Public   | Danh sách danh mục                            |
 
 ## Database Schema
 

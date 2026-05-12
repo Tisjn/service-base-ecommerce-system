@@ -72,9 +72,9 @@ public void syncProductState() {
 
 ```env
 PORT=3003
-SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/productdb
-SPRING_DATASOURCE_USERNAME=root
-SPRING_DATASOURCE_PASSWORD=password
+SPRING_DATASOURCE_URL=jdbc:mysql://your-rds-endpoint.ap-southeast-1.rds.amazonaws.com:3306/productdb?useSSL=true&requireSSL=true
+SPRING_DATASOURCE_USERNAME=admin
+SPRING_DATASOURCE_PASSWORD=your_rds_password
 SPRING_REDIS_HOST=redis-cache
 SPRING_REDIS_PORT=6379
 ```

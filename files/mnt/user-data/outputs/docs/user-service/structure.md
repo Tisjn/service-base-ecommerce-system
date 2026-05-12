@@ -36,14 +36,14 @@ src/
 
 ## API Endpoints
 
-| Method | Path                | Role     | Mô tả                        |
-| ------ | ------------------- | -------- | ---------------------------- |
-| GET    | `/users/me`         | Customer | Xem profile bản thân         |
-| PATCH  | `/users/me`         | Customer | Cập nhật profile             |
-| GET    | `/users`            | Admin    | Danh sách users (phân trang) |
-| GET    | `/users/:id`        | Admin    | Xem user bất kỳ              |
-| PATCH  | `/users/:id/status` | Admin    | Khoá/mở khoá                 |
-| DELETE | `/users/:id`        | Admin    | Soft delete                  |
+| Method | Path                | Role     | Mô tả                                     |
+| ------ | ------------------- | -------- | ----------------------------------------- |
+| GET    | `/users/me`         | Customer | Xem profile bản thân                      |
+| PATCH  | `/users/me`         | Customer | Cập nhật profile                          |
+| GET    | `/users`            | Admin    | Danh sách users (phân trang)              |
+| GET    | `/users/:id`        | Admin    | Xem user bất kỳ (không hiển thị mật khẩu) |
+| PATCH  | `/users/:id/status` | Admin    | Khoá/mở khoá                              |
+| DELETE | `/users/:id`        | Admin    | Soft delete (chỉ khi chưa từng đặt hàng)  |
 
 ## Database Schema
 

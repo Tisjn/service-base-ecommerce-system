@@ -52,9 +52,9 @@ public FilterRegistrationBean<OncePerRequestFilter> rateLimitFilter() {
 
 ```env
 PORT=3002
-SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/userdb
-SPRING_DATASOURCE_USERNAME=root
-SPRING_DATASOURCE_PASSWORD=password
+SPRING_DATASOURCE_URL=jdbc:mysql://your-rds-endpoint.ap-southeast-1.rds.amazonaws.com:3306/userdb?useSSL=true&requireSSL=true
+SPRING_DATASOURCE_USERNAME=admin
+SPRING_DATASOURCE_PASSWORD=your_rds_password
 ORDER_SERVICE_URL=http://order-service:3004
 ```
 

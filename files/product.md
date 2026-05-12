@@ -136,12 +136,19 @@ REFRESH_TOKEN_EXPIRES_IN=7d
 REDIS_HOST=redis-cache
 REDIS_PORT=6379
 
-# Database (MySQL) — auth-service dùng DB_* variables
-DB_HOST=mysql
-DB_PORT=3306
+# Shared AWS RDS variables (project-level)
+RDS_HOST=your-rds-endpoint.ap-southeast-1.rds.amazonaws.com
+RDS_PORT=3306
+RDS_USER=admin
+RDS_PASSWORD=your_rds_password
+RDS_SSL=true
+
+# Database mapping for auth-service
+DB_HOST=${RDS_HOST}
+DB_PORT=${RDS_PORT}
 DB_NAME=authdb
-DB_USER=root
-DB_PASSWORD=password
+DB_USER=${RDS_USER}
+DB_PASSWORD=${RDS_PASSWORD}
 
 # SMTP (Gmail App Password recommended)
 SMTP_HOST=smtp.gmail.com

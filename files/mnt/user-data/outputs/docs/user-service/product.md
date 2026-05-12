@@ -6,30 +6,32 @@
 
 ## Vai trò trong hệ thống
 
-| Vai trò  | Trách nhiệm                                  |
-| -------- | -------------------------------------------- |
-| Customer | Xem và cập nhật hồ sơ cá nhân                |
-| Customer | Xem lịch sử đơn hàng thông qua order-service |
-| Admin    | Quản lý danh sách người dùng                 |
-| Admin    | Khoá / mở khoá / xoá tài khoản               |
+| Vai trò  | Trách nhiệm                                                                             |
+| -------- | --------------------------------------------------------------------------------------- |
+| Customer | Xem và cập nhật hồ sơ cá nhân                                                           |
+| Customer | Xem lịch sử đơn hàng thông qua order-service                                            |
+| Admin    | Xem danh sách tài khoản, xem chi tiết (không hiển thị mật khẩu)                         |
+| Admin    | Cập nhật thông tin người dùng, khoá/mở khoá, xoá tài khoản (chỉ khi chưa từng đặt hàng) |
 
 ## Chức năng chính
 
 - Xem profile bản thân theo `userId` từ JWT payload
 - Cập nhật `fullName`, `phone`, `address`
-- Quản lý user cho admin: phân trang, lọc, khóa/mở khóa, soft delete
+- Quản lý user cho admin: xem danh sách, xem chi tiết, cập nhật thông tin, khóa/mở khóa và soft delete (chỉ khi chưa từng đặt hàng)
 - Nhận header do API Gateway inject: `X-User-Id`, `X-User-Role`, `X-User-Email`
+- Không trả về mật khẩu vì mật khẩu được quản lý bởi auth-service.
+- `GET /users/:id` chỉ trả về dữ liệu profile hiển thị, không chứa password.
 
 ## API quan trọng
 
-| Method | Path                | Vai trò  | Mô tả                |
-| ------ | ------------------- | -------- | -------------------- |
-| GET    | `/users/me`         | Customer | Xem profile bản thân |
-| PATCH  | `/users/me`         | Customer | Cập nhật profile     |
-| GET    | `/users`            | Admin    | Danh sách users      |
-| GET    | `/users/:id`        | Admin    | Xem user bất kỳ      |
-| PATCH  | `/users/:id/status` | Admin    | Khoá / mở khoá       |
-| DELETE | `/users/:id`        | Admin    | Soft delete          |
+| Method | Path                | Vai trò  | Mô tả                                     |
+| ------ | ------------------- | -------- | ----------------------------------------- |
+| GET    | `/users/me`         | Customer | Xem profile bản thân                      |
+| PATCH  | `/users/me`         | Customer | Cập nhật profile                          |
+| GET    | `/users`            | Admin    | Danh sách users                           |
+| GET    | `/users/:id`        | Admin    | Xem user bất kỳ (không hiển thị mật khẩu) |
+| PATCH  | `/users/:id/status` | Admin    | Khoá / mở khoá                            |
+| DELETE | `/users/:id`        | Admin    | Soft delete (chỉ khi chưa từng đặt hàng)  |
 
 ## Dữ liệu chính
 

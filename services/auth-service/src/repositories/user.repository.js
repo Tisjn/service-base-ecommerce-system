@@ -2,7 +2,7 @@ const db = require("../config/db");
 
 async function findByEmail(email) {
   const [rows] = await db.query(
-    "SELECT id, email, password, full_name AS fullName, role, status FROM users WHERE email = ? LIMIT 1",
+    "SELECT id, email, password, full_name AS fullName, role, status, avatar_url AS avatarUrl FROM users WHERE email = ? LIMIT 1",
     [email],
   );
 
@@ -11,7 +11,7 @@ async function findByEmail(email) {
 
 async function findById(id) {
   const [rows] = await db.query(
-    "SELECT id, email, password, full_name AS fullName, role, status FROM users WHERE id = ? LIMIT 1",
+    "SELECT id, email, password, full_name AS fullName, role, status, avatar_url AS avatarUrl FROM users WHERE id = ? LIMIT 1",
     [id],
   );
 
@@ -22,18 +22,20 @@ async function createUser({
   email,
   password,
   fullName,
+  avatarUrl = null,
   role = "customer",
   status = "active",
 }) {
   const [result] = await db.query(
-    "INSERT INTO users (email, password, full_name, role, status) VALUES (?, ?, ?, ?, ?)",
-    [email, password, fullName, role, status],
+    "INSERT INTO users (email, password, full_name, role, status, avatar_url) VALUES (?, ?, ?, ?, ?, ?)",
+    [email, password, fullName, role, status, avatarUrl],
   );
 
   return {
     id: result.insertId,
     email,
     fullName,
+    avatarUrl,
     role,
     status,
   };

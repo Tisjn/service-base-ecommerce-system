@@ -64,6 +64,12 @@ const env = {
     user: requireEnv("SMTP_USER"),
     pass: requireEnv("SMTP_PASS"),
   },
+  aws: {
+    region: process.env.AWS_REGION || "us-east-1",
+    bucket: requireEnv("AWS_S3_BUCKET"),
+    accessKeyId: requireEnv("AWS_ACCESS_KEY_ID"),
+    secretAccessKey: requireEnv("AWS_SECRET_ACCESS_KEY"),
+  },
   otp: {
     ttlSeconds: toInt("OTP_TTL_SECONDS", 300),
     maxAttempts: toInt("OTP_MAX_ATTEMPTS", 3),

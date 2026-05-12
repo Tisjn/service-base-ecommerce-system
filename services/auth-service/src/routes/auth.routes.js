@@ -1,5 +1,6 @@
 const express = require("express");
 const { body } = require("express-validator");
+const multer = require("multer");
 
 const authController = require("../controllers/auth.controller");
 const validateRequest = require("../middlewares/validateRequest");
@@ -9,12 +10,29 @@ const {
   passwordLimiter,
 } = require("../middlewares/rateLimiter");
 
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_, file, cb) => {
+    if (!file.mimetype.startsWith("image/")) {
+      return cb(new Error("Chỉ chấp nhận tệp ảnh."));
+    }
+    cb(null, true);
+  },
+});
+
 const router = express.Router();
 
 const emailRule = body("email")
   .isEmail()
   .withMessage("Email không hợp lệ")
   .normalizeEmail();
+
+router.post(
+  "/upload-avatar",
+  upload.single("avatar"),
+  authController.uploadAvatar,
+);
 
 router.post(
   "/register",
@@ -92,6 +110,8 @@ router.post(
 );
 
 router.post("/logout", authController.logout);
+
+router.get("/profile", authController.getProfile);
 
 router.post("/verify", authController.verify);
 
