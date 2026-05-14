@@ -2,6 +2,8 @@
 
 Lightweight authentication microservice for ShopNova - OTP via SMTP, JWT access + refresh, Redis for OTP and refresh tokens, MySQL (RDS) for users.
 
+AWS S3 is only required for `POST /auth/upload-avatar`. Register and login work without AWS configuration.
+
 ## Quick overview
 
 Endpoints
@@ -42,6 +44,12 @@ RDS_PORT=3306
 RDS_USER=admin
 RDS_PASSWORD=your_rds_password
 RDS_SSL=true
+
+# AWS S3 for avatar uploads only (optional unless you use /auth/upload-avatar)
+AWS_REGION=us-east-1
+AWS_S3_BUCKET=
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
 
 # Database mapping for auth-service
 DB_HOST=${RDS_HOST}
@@ -94,10 +102,12 @@ docker run --rm -p 3001:3001 \
   auth-service:latest
 ```
 
-Or use the included `docker-compose.yml`:
+If you want avatar uploads, also pass `AWS_REGION`, `AWS_S3_BUCKET`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY`.
+
+Use the root `docker-compose.yml` at the project root so auth-service and api-gateway share the same Docker network.
 
 ```bash
-cd services/auth-service
+cd <project-root>
 docker compose up --build
 ```
 
@@ -199,6 +209,7 @@ Store only the image URL in the database, and save the uploaded file under `uplo
 - For Gmail, enable 2FA and create an **App Password** to use as `SMTP_PASS`.
 - `Redis` is required for OTPs and refresh token storage; ensure `REDIS_HOST`/`REDIS_PORT` point to a running Redis instance.
 - `DB_*` variables configure the MySQL connection (RDS): `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`. SSL can be enabled with `DB_SSL=true`.
+- AWS S3 variables are optional unless you use avatar upload.
 - Health check URL: `GET /health` returns `{ status: "ok" }`.
 
 ## Troubleshooting

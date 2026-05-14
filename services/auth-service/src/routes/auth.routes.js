@@ -113,6 +113,32 @@ router.post("/logout", authController.logout);
 
 router.get("/profile", authController.getProfile);
 
+router.put(
+  "/profile",
+  [
+    body("fullName")
+      .trim()
+      .notEmpty()
+      .withMessage("Ho ten khong duoc de trong"),
+  ],
+  validateRequest,
+  authController.updateProfile,
+);
+
+router.put(
+  "/profile/avatar",
+  upload.single("avatar"),
+  authController.updateProfileAvatar,
+);
+
+router.post(
+  "/profile/avatar",
+  upload.single("avatar"),
+  authController.updateProfileAvatar,
+);
+
+router.delete("/profile/avatar", authController.deleteProfileAvatar);
+
 router.post("/verify", authController.verify);
 
 module.exports = router;

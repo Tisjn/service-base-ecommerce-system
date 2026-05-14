@@ -1,81 +1,131 @@
-function Dashboard({ onLogout, user }) {
+import { useEffect, useState } from "react";
+import AccountProfilePage from "./customer/AccountProfilePage.jsx";
+import CustomerOrderHubPage from "./customer/CustomerOrderHubPage";
+import ProductAdminPage from "./admin/products/ProductAdminPage";
+
+function isAdminUser(user) {
+  return String(user?.role || user?.roles?.[0] || user?.authorities?.[0] || "")
+    .toUpperCase()
+    .includes("ADMIN");
+}
+
+function Dashboard({ onLogout, onUserUpdate, onRequestLogin, user }) {
+  const isAdmin = isAdminUser(user);
+  const [activeView, setActiveView] = useState(() =>
+    isAdminUser(user) ? "products" : "orders",
+  );
+
+  useEffect(() => {
+    setActiveView(isAdmin ? "products" : "orders");
+  }, [isAdmin, user?.id, user?.userId, user?.email]);
+
+  if (activeView === "products" && isAdmin) {
+    return (
+      <ProductAdminPage
+        user={user}
+        onLogout={onLogout}
+        onNavigate={setActiveView}
+      />
+    );
+  }
+
+  const pageTitle =
+    activeView === "products"
+      ? "Quản trị sản phẩm"
+      : activeView === "account"
+        ? "Tài khoản"
+        : "DTPShop";
+
   return (
-    <main className="min-h-screen flex items-center justify-center py-10 px-4 bg-linear-to-br from-blue-50 to-gray-100">
-      <section className="max-w-7xl w-full bg-white rounded-3xl shadow-2xl p-10 grid gap-8">
-        <header className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-          <div className="flex items-center gap-5">
-            <div className="h-20 w-20 rounded-3xl overflow-hidden border-4 border-sky-100 bg-slate-100">
-              {user.avatarUrl ? (
-                <img
-                  src={user.avatarUrl}
-                  alt={user.fullName || user.email}
-                  className="h-full w-full object-cover"
-                />
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.1),transparent_30%),radial-gradient(circle_at_top_right,rgba(249,115,22,0.12),transparent_30%),linear-gradient(180deg,#f8fbff_0%,#f3f7fb_100%)] px-4 py-6 sm:px-6 lg:px-8">
+      <section className="mx-auto grid max-w-7xl gap-6">
+        <div className="rounded-4xl border border-white/70 bg-white/90 p-5 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.35)] backdrop-blur sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.4em] text-sky-600/80">
+                DTPShop
+              </p>
+              <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+                {pageTitle}
+              </h1>
+              <p className="mt-2 text-sm text-slate-600">
+                Xin chào {user?.fullName || user?.email || "người dùng"}. Bạn có
+                thể mua hàng, theo dõi đơn, quản trị và chỉnh sửa hồ sơ.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <NavButton
+                active={activeView === "orders"}
+                onClick={() => setActiveView("orders")}
+              >
+                Đơn hàng
+              </NavButton>
+              {user ? (
+                <NavButton
+                  active={activeView === "account"}
+                  activeClass="bg-emerald-600 text-white shadow-lg shadow-emerald-500/20"
+                  onClick={() => setActiveView("account")}
+                >
+                  Tài khoản
+                </NavButton>
+              ) : null}
+              {isAdmin && (
+                <NavButton
+                  active={activeView === "products"}
+                  activeClass="bg-orange-600 text-white shadow-lg shadow-orange-500/20"
+                  onClick={() => setActiveView("products")}
+                >
+                  Sản phẩm
+                </NavButton>
+              )}
+              {user ? (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-slate-800"
+                >
+                  Đăng xuất
+                </button>
               ) : (
-                <div className="flex h-full w-full items-center justify-center bg-slate-200 text-xl font-semibold text-slate-700">
-                  {user.fullName
-                    ? user.fullName
-                        .split(" ")
-                        .map((part) => part[0])
-                        .slice(0, 2)
-                        .join("")
-                        .toUpperCase()
-                    : user.email?.charAt(0).toUpperCase()}
-                </div>
+                <button
+                  type="button"
+                  onClick={onRequestLogin}
+                  className="rounded-2xl bg-orange-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-orange-700"
+                >
+                  Đăng nhập
+                </button>
               )}
             </div>
-            <div>
-              <p className="text-blue-600 uppercase tracking-widest text-xs mb-3">
-                Chào mừng, {user.fullName || "người dùng"}
-              </p>
-              <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 leading-tight max-w-lg">
-                Dashboard quản lý DTPShop
-              </h1>
-              <p className="text-gray-600 leading-relaxed mt-4 max-w-lg">
-                Bạn đang đăng nhập với email{" "}
-                <span className="font-semibold text-slate-900">
-                  {user.email}
-                </span>
-                .
-              </p>
-            </div>
-          </div>
-          <button
-            className="self-start bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors"
-            onClick={onLogout}
-          >
-            Đăng xuất
-          </button>
-        </header>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-blue-50 rounded-2xl p-7 min-h-[180px]">
-            <h2 className="text-xl font-bold mb-3">Hồ sơ</h2>
-            <p className="text-gray-600 leading-relaxed">
-              Xem thông tin cá nhân và avatar của bạn.
-            </p>
-          </div>
-          <div className="bg-blue-50 rounded-2xl p-7 min-h-[180px]">
-            <h2 className="text-xl font-bold mb-3">Đơn hàng</h2>
-            <p className="text-gray-600 leading-relaxed">
-              Quản lý trạng thái đơn hàng và lịch sử mua sắm.
-            </p>
-          </div>
-          <div className="bg-blue-50 rounded-2xl p-7 min-h-[180px]">
-            <h2 className="text-xl font-bold mb-3">Sản phẩm</h2>
-            <p className="text-gray-600 leading-relaxed">
-              Quản lý danh sách sản phẩm và kho hàng.
-            </p>
-          </div>
-          <div className="bg-blue-50 rounded-2xl p-7 min-h-[180px]">
-            <h2 className="text-xl font-bold mb-3">Bảo mật</h2>
-            <p className="text-gray-600 leading-relaxed">
-              Quản lý đổi mật khẩu, OTP và phương thức xác thực.
-            </p>
           </div>
         </div>
+
+        {activeView === "account" ? (
+          <AccountProfilePage user={user} onUserUpdate={onUserUpdate} />
+        ) : (
+          <CustomerOrderHubPage user={user} />
+        )}
       </section>
     </main>
+  );
+}
+
+function NavButton({
+  active,
+  activeClass = "bg-sky-600 text-white shadow-lg shadow-sky-500/20",
+  children,
+  onClick,
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-2xl px-5 py-3 text-sm font-semibold transition ${
+        active ? activeClass : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 

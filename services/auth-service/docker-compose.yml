@@ -10,7 +10,7 @@ services:
     image: redis:7-alpine
 
     # Đặt tên container
-    container_name: redis-cache
+    container_name: redis-cache-auth
 
     # Mapping port:
     # Máy thật:6379 -> Container:6379
@@ -153,6 +153,10 @@ services:
 
       # OTP nhập sai tối đa 3 lần
       - OTP_MAX_ATTEMPTS=3
+      - AWS_REGION=${AWS_REGION}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
 
     # Nếu container crash sẽ tự restart
     # Trừ khi user stop thủ công

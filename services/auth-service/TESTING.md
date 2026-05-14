@@ -59,7 +59,7 @@ This tests the complete workflow with MySQL + Redis.
 ### 1. Setup and start services
 
 ```bash
-cd services/auth-service
+cd <project-root>
 docker compose up --build
 ```
 

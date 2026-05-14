@@ -1,0 +1,87 @@
+version: "3.8"
+
+services:
+  # =========================
+  # Redis Cache
+  # =========================
+  redis-cache:
+    image: redis:7-alpine
+    container_name: redis-cache-order
+    ports:
+      - "6381:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # =========================
+  # RabbitMQ
+  # =========================
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: order-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =========================
+  # Order Service
+  # =========================
+  order-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: order-service
+    ports:
+      - "3004:3004"
+    environment:
+      # AWS RDS MySQL
+      - RDS_HOST=database-1-instance-1.cvwyy4mmuaiw.ap-southeast-1.rds.amazonaws.com
+      - RDS_PORT=3306
+      - RDS_DB=ecommerce_data
+      - RDS_USER=admin
+      - RDS_PASSWORD=Tinle091104
+      - RDS_SSL=false
+      # Redis
+      - SPRING_REDIS_HOST=redis-cache
+      - SPRING_REDIS_PORT=6379
+      - REDIS_HOST=redis-cache
+      - REDIS_PORT=6379
+      # RabbitMQ
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
+      - SPRING_RABBITMQ_VIRTUAL_HOST=/
+      # Downstream services
+      - PRODUCT_SERVICE_URL=http://host.docker.internal:3003
+      # Application port
+      - SERVER_PORT=3004
+    depends_on:
+      redis-cache:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: on-failure
+
+volumes:
+  redis_data:
+
+networks:
+  app-network:
+    driver: bridge

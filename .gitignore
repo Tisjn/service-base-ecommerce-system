@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+target/
+build/
+*.class
+*.jar
+*.war
+
+# Logs and temporary output
+*.log
+*.out.log
+build_output.txt
+classdump.txt
+
+# Local environment and uploads
+.env
+.env.*
+!.env.example
+uploads/
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

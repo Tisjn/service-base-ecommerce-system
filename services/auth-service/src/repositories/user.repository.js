@@ -49,9 +49,37 @@ async function updatePassword(email, password) {
   return result.affectedRows > 0;
 }
 
+async function updateProfile(id, { fullName }) {
+  const [result] = await db.query(
+    "UPDATE users SET full_name = ? WHERE id = ?",
+    [fullName, id],
+  );
+
+  if (result.affectedRows === 0) {
+    return null;
+  }
+
+  return findById(id);
+}
+
+async function updateAvatarUrl(id, avatarUrl) {
+  const [result] = await db.query(
+    "UPDATE users SET avatar_url = ? WHERE id = ?",
+    [avatarUrl, id],
+  );
+
+  if (result.affectedRows === 0) {
+    return null;
+  }
+
+  return findById(id);
+}
+
 module.exports = {
   findByEmail,
   findById,
   createUser,
   updatePassword,
+  updateProfile,
+  updateAvatarUrl,
 };

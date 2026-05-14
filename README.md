@@ -59,3 +59,8 @@ Moi service chi doi ten schema:
 - Guest khong duoc dat hang truc tiep
 - Endpoint dat hang chi danh cho Customer
 - Sau khi checkout thanh cong, gio hang Session duoc clear
+
+## Auth service
+
+- Dang ky va dang nhap khong can cau hinh AWS.
+- Chi khi dung `POST /auth/upload-avatar` thi moi can them bien AWS S3 cho auth-service.
