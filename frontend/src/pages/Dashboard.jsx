@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import AccountProfilePage from "./customer/AccountProfilePage.jsx";
 import CustomerOrderHubPage from "./customer/CustomerOrderHubPage";
 import ProductAdminPage from "./admin/products/ProductAdminPage";
+import ChatWidget from "../components/chat/ChatWidget.jsx";
 
 function isAdminUser(user) {
   return String(user?.role || user?.roles?.[0] || user?.authorities?.[0] || "")
@@ -106,6 +107,9 @@ function Dashboard({ onLogout, onUserUpdate, onRequestLogin, user }) {
           <CustomerOrderHubPage user={user} />
         )}
       </section>
+      {!isAdmin ? (
+        <ChatWidget user={user} onRequestLogin={onRequestLogin} />
+      ) : null}
     </main>
   );
 }

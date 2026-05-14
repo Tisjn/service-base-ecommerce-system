@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminDevelopmentPage from "../AdminDevelopmentPage";
 import { ADMIN_SECTIONS } from "../adminSections";
+import AdminSupportPage from "../support/AdminSupportPage";
 import ProductImageUpload from "../../../components/ProductImageUpload";
 import {
   createCategory,
@@ -556,6 +557,8 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
             onDelete={handleDeleteCategory}
           />
         </div>
+        ) : activeAdminSection === "support" ? (
+          <AdminSupportPage user={user} />
         ) : (
           <AdminDevelopmentPage section={ADMIN_SECTIONS[activeAdminSection]} />
         )}

@@ -1,0 +1,56 @@
+services:
+  # =========================
+  # Chat Service
+  # =========================
+  chat-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chat-service
+    ports:
+      - "3008:3008"
+    environment:
+      # Application
+      - PORT=3008
+      - NODE_ENV=production
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+
+      # JWT shared with auth-service
+      - JWT_SECRET=${JWT_SECRET:-0a8e7a473e35d1080204701f57ba0cb86641689c11998b16662f96be329c2ac3}
+
+      # AWS DynamoDB
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - DDB_CHAT_ROOMS_TABLE=${DDB_CHAT_ROOMS_TABLE:-chat_rooms}
+      - DDB_CHAT_MESSAGES_TABLE=${DDB_CHAT_MESSAGES_TABLE:-chat_messages}
+
+      # File upload
+      - UPLOAD_PATH=/app/uploads
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE:-5242880}
+      - ALLOWED_IMAGE_TYPES=${ALLOWED_IMAGE_TYPES:-image/jpeg,image/png,image/gif,image/webp}
+      - ALLOWED_FILE_TYPES=${ALLOWED_FILE_TYPES:-application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document}
+    volumes:
+      - chat_uploads:/app/uploads
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3008/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  chat_uploads:
+
+networks:
+  app-network:
+    driver: bridge
