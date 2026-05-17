@@ -2,17 +2,22 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminDevelopmentPage from "../AdminDevelopmentPage";
 import { ADMIN_SECTIONS } from "../adminSections";
 import AdminSupportPage from "../support/AdminSupportPage";
+import AdminTopbar from "../../../components/admin/AdminTopbar";
 import ProductImageUpload from "../../../components/ProductImageUpload";
+import { useOrderNotifications } from "../../../context/OrderNotificationContext";
+import orderApi from "../../../api/orderApi";
 import {
   createCategory,
   createProduct,
   deleteCategory,
   deleteProduct,
   getCategories,
+  getProduct,
   getProducts,
   updateCategory,
   updateProduct,
 } from "../../../api/productApi";
+import { formatDateTime } from "../../customer/orders/orderUtils";
 
 const currencyFormatter = new Intl.NumberFormat("vi-VN", {
   style: "currency",
@@ -28,6 +33,7 @@ const initialFormState = {
   categoryId: "",
   status: "ACTIVE",
   imageUrl: "",
+  descriptionImageUrlsText: "",
 };
 
 const initialCategoryFormState = {
@@ -49,7 +55,11 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
     totalPages: 1,
     totalElements: 0,
   });
-  const [filter, setFilter] = useState({ search: "", status: "", categoryId: "" });
+  const [filter, setFilter] = useState({
+    search: "",
+    status: "",
+    categoryId: "",
+  });
   const [filterDraft, setFilterDraft] = useState(filter);
   const [form, setForm] = useState(initialFormState);
   const [categoryForm, setCategoryForm] = useState(initialCategoryFormState);
@@ -57,17 +67,39 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [showProductForm, setShowProductForm] = useState(false);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
+  const [selectedDetailProduct, setSelectedDetailProduct] = useState(null);
+  const [detailProductLoading, setDetailProductLoading] = useState(false);
+  const [detailProductError, setDetailProductError] = useState("");
+  const [detailProductData, setDetailProductData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isCategorySaving, setIsCategorySaving] = useState(false);
   const [notification, setNotification] = useState(null);
   const [activeAdminSection, setActiveAdminSection] = useState("products");
+  const [adminOrders, setAdminOrders] = useState([]);
+  const [adminOrdersLoading, setAdminOrdersLoading] = useState(false);
+  const [adminOrdersError, setAdminOrdersError] = useState("");
+  const [selectedAdminOrderId, setSelectedAdminOrderId] = useState(null);
+  const [selectedAdminOrder, setSelectedAdminOrder] = useState(null);
+  const [selectedAdminOrderComments, setSelectedAdminOrderComments] = useState(
+    [],
+  );
+  const [selectedAdminOrderLoading, setSelectedAdminOrderLoading] =
+    useState(false);
+  const [selectedAdminOrderError, setSelectedAdminOrderError] = useState("");
+  const [orderStatusUpdating, setOrderStatusUpdating] = useState(false);
+  const { openedOrderId, closeOrder } = useOrderNotifications() || {
+    openedOrderId: null,
+    closeOrder: () => {},
+  };
 
   const stats = useMemo(() => {
     const outOfStock = products.filter(
       (product) => Number(product.stockQuantity || 0) <= 0,
     ).length;
-    const hidden = products.filter((product) => product.status === "HIDDEN").length;
+    const hidden = products.filter(
+      (product) => product.status === "HIDDEN",
+    ).length;
     const topCategory = categories[0]?.name || "Chưa có dữ liệu";
 
     return {
@@ -126,19 +158,102 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
   }, [loadProducts]);
 
   useEffect(() => {
+    if (activeAdminSection === "orders") {
+      loadAdminOrders();
+    }
+  }, [activeAdminSection]);
+
+  useEffect(() => {
+    if (!selectedAdminOrderId) return undefined;
+    loadAdminOrderDetail(selectedAdminOrderId);
+  }, [selectedAdminOrderId]);
+
+  useEffect(() => {
     if (!notification) return undefined;
     const timer = window.setTimeout(() => setNotification(null), 3500);
     return () => window.clearTimeout(timer);
   }, [notification]);
 
+  async function loadAdminOrders() {
+    setAdminOrdersLoading(true);
+    setAdminOrdersError("");
+    try {
+      const data = await orderApi.getAllOrders();
+      setAdminOrders(Array.isArray(data) ? data : []);
+    } catch (error) {
+      setAdminOrdersError(error.message || "Không tải được đơn hàng.");
+    } finally {
+      setAdminOrdersLoading(false);
+    }
+  }
+
+  async function loadAdminOrderDetail(orderId) {
+    if (!orderId) return;
+    setSelectedAdminOrderLoading(true);
+    setSelectedAdminOrderError("");
+    setSelectedAdminOrder(null);
+    setSelectedAdminOrderComments([]);
+    try {
+      const [orderResult, commentsResult] = await Promise.all([
+        orderApi.getOrder(orderId),
+        orderApi.getOrderComments(orderId),
+      ]);
+      setSelectedAdminOrder(orderResult);
+      setSelectedAdminOrderComments(
+        Array.isArray(commentsResult) ? commentsResult : [],
+      );
+    } catch (error) {
+      setSelectedAdminOrderError(
+        error.message || "Không tải được chi tiết đơn hàng.",
+      );
+    } finally {
+      setSelectedAdminOrderLoading(false);
+    }
+  }
+
+  function openAdminOrderDetail(order) {
+    const id = order.orderId || order.id;
+    setSelectedAdminOrderId(id);
+  }
+
+  function closeAdminOrderDetail() {
+    setSelectedAdminOrderId(null);
+    setSelectedAdminOrder(null);
+    setSelectedAdminOrderError("");
+  }
+
+  async function handleAdminOrderStatusUpdate(newStatus) {
+    if (!selectedAdminOrderId) return;
+    setOrderStatusUpdating(true);
+    try {
+      await orderApi.updateOrderStatus(selectedAdminOrderId, newStatus);
+      showNotification("success", `Đã chuyển đơn sang ${newStatus}.`);
+      await Promise.all([
+        loadAdminOrders(),
+        loadAdminOrderDetail(selectedAdminOrderId),
+      ]);
+    } catch (error) {
+      showNotification(
+        "error",
+        error.message || "Không cập nhật được trạng thái đơn hàng.",
+      );
+    } finally {
+      setOrderStatusUpdating(false);
+    }
+  }
+
+  // Notifications handled globally via OrderNotificationProvider
+
   useEffect(() => {
-    if (!showProductForm && !showCategoryForm) return undefined;
+    if (!showProductForm && !showCategoryForm && !selectedDetailProduct)
+      return undefined;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
         closeProductForm();
         closeCategoryForm();
+        closeProductDetail();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -146,7 +261,7 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [showCategoryForm, showProductForm]);
+  }, [showCategoryForm, showProductForm, selectedDetailProduct]);
 
   function showNotification(type, text) {
     setNotification({ type, text });
@@ -180,6 +295,9 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
       categoryId: product.category?.id?.toString() || "",
       status: product.status || "ACTIVE",
       imageUrl: product.imageUrl || "",
+      descriptionImageUrlsText: Array.isArray(product.descriptionImageUrls)
+        ? product.descriptionImageUrls.join("\n")
+        : "",
     });
     setShowProductForm(true);
   }
@@ -237,6 +355,10 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
       categoryId: form.categoryId ? Number(form.categoryId) : undefined,
       status: form.status,
       imageUrl: form.imageUrl || undefined,
+      descriptionImageUrls: form.descriptionImageUrlsText
+        .split(/\r?\n/)
+        .map((url) => url.trim())
+        .filter(Boolean),
     };
 
     setIsSaving(true);
@@ -270,6 +392,69 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
     }
   }
 
+  async function openProductDetail(product) {
+    setSelectedDetailProduct(product);
+    setDetailProductLoading(true);
+    setDetailProductError("");
+    setDetailProductData(null);
+
+    try {
+      const [productResult, detailWithCommentsResult] =
+        await Promise.allSettled([
+          getProduct(product.id),
+          orderApi.getProductDetailWithComments(product.id),
+        ]);
+
+      const productData =
+        productResult.status === "fulfilled" ? productResult.value : product;
+      const detailWithComments =
+        detailWithCommentsResult.status === "fulfilled"
+          ? detailWithCommentsResult.value
+          : null;
+
+      const detailPayload = {
+        product: productData,
+        comments: detailWithComments?.comments || [],
+        ratingStats: detailWithComments
+          ? {
+              totalComments: detailWithComments.totalComments,
+              averageRating: detailWithComments.averageRating,
+              ratingCount1Star: detailWithComments.ratingCount1Star,
+              ratingCount2Star: detailWithComments.ratingCount2Star,
+              ratingCount3Star: detailWithComments.ratingCount3Star,
+              ratingCount4Star: detailWithComments.ratingCount4Star,
+              ratingCount5Star: detailWithComments.ratingCount5Star,
+            }
+          : null,
+      };
+
+      setDetailProductData(detailPayload);
+      if (
+        productResult.status === "rejected" &&
+        detailWithCommentsResult.status === "rejected"
+      ) {
+        setDetailProductError(
+          productResult.reason?.message ||
+            detailWithCommentsResult.reason?.message ||
+            "Không tải được chi tiết sản phẩm.",
+        );
+      }
+    } catch (error) {
+      setDetailProductError(
+        error.message || "Không tải được chi tiết sản phẩm.",
+      );
+    } finally {
+      setDetailProductLoading(false);
+    }
+  }
+
+  function closeProductDetail() {
+    setSelectedDetailProduct(null);
+    setDetailProductData(null);
+    setDetailProductError("");
+    setDetailProductLoading(false);
+  }
+
   async function handleSubmitCategory(event) {
     event.preventDefault();
 
@@ -280,7 +465,9 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
 
     const payload = {
       name: categoryForm.name.trim(),
-      slug: (categoryForm.slug || slugifyCategoryName(categoryForm.name)).trim(),
+      slug: (
+        categoryForm.slug || slugifyCategoryName(categoryForm.name)
+      ).trim(),
     };
 
     setIsCategorySaving(true);
@@ -302,7 +489,11 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
   }
 
   async function handleDeleteCategory(categoryId) {
-    if (!window.confirm("Xóa danh mục này? Backend có thể từ chối nếu đang được dùng.")) {
+    if (
+      !window.confirm(
+        "Xóa danh mục này? Backend có thể từ chối nếu đang được dùng.",
+      )
+    ) {
       return;
     }
 
@@ -324,239 +515,305 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
       />
 
       <main className="min-h-screen lg:ml-64">
-        <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-[#c3c6d7]/20 bg-[#f3f3fe] px-4 lg:px-8">
-          <div className="flex min-w-0 items-center gap-8">
-            <span className="hidden text-xl font-bold tracking-tight text-[#191b23] [font-family:Manrope,system-ui,sans-serif] sm:block">
-              DTPShop
-            </span>
-            <div className="relative w-full max-w-96">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#737686] opacity-60">
-                search
-              </span>
-              <input
-                className="w-full rounded-lg border-none bg-[#e1e2ed] py-2 pl-10 pr-4 text-sm text-[#191b23] transition focus:bg-white focus:ring-2 focus:ring-[#004ac6]"
-                placeholder="Tìm kiếm sản phẩm..."
-                value={filterDraft.search}
-                onChange={(event) =>
-                  setFilterDraft((prev) => ({ ...prev, search: event.target.value }))
-                }
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") applyFilters();
-                }}
-                type="text"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 sm:gap-6">
-            <IconButton icon="notifications" />
-            <IconButton icon="settings" />
-            <div className="hidden h-8 w-px bg-[#c3c6d7]/50 sm:block" />
-            <button
-              type="button"
-              onClick={onLogout}
-              className="flex items-center gap-3 active:opacity-80"
-            >
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#004ac6] text-xs font-extrabold text-white">
-                {(user?.fullName || user?.email || "A").slice(0, 1).toUpperCase()}
-              </div>
-              <span className="hidden font-semibold text-sm text-blue-600 sm:block">
-                Đăng xuất
-              </span>
-            </button>
-          </div>
-        </header>
+        <AdminTopbar
+          user={user}
+          onLogout={onLogout}
+          onNavigate={onNavigate}
+          filterDraft={filterDraft}
+          setFilterDraft={setFilterDraft}
+          applyFilters={applyFilters}
+        />
 
         {activeAdminSection === "products" ? (
-        <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-10">
-          <div className="mb-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h2 className="mb-2 text-4xl font-extrabold tracking-tight text-[#191b23] [font-family:Manrope,system-ui,sans-serif]">
-                Quản lý Sản phẩm
-              </h2>
-              <p className="text-[#434655]">
-                Theo dõi kho hàng, giá cả và hiển thị sản phẩm trên toàn hệ thống.
-              </p>
+          <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-10">
+            <div className="mb-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h2 className="mb-2 text-4xl font-extrabold tracking-tight text-[#191b23] [font-family:Manrope,system-ui,sans-serif]">
+                  Quản lý Sản phẩm
+                </h2>
+                <p className="text-[#434655]">
+                  Theo dõi kho hàng, giá cả và hiển thị sản phẩm trên toàn hệ
+                  thống.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={openCreateCategoryForm}
+                  className="flex items-center gap-2 rounded-xl border border-[#c3c6d7]/30 bg-white px-5 py-3 font-semibold text-[#004ac6] shadow-sm transition hover:scale-105 active:scale-95"
+                >
+                  <span className="material-symbols-outlined">category</span>
+                  <span>Thêm danh mục</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={openCreateProductForm}
+                  className="flex items-center gap-2 rounded-xl bg-gradient-to-br from-[#9d4300] to-[#fd761a] px-6 py-3 font-semibold text-white shadow-xl shadow-orange-500/10 transition hover:scale-105 active:scale-95"
+                >
+                  <span className="material-symbols-outlined">add</span>
+                  <span>Thêm sản phẩm mới</span>
+                </button>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={openCreateCategoryForm}
-                className="flex items-center gap-2 rounded-xl border border-[#c3c6d7]/30 bg-white px-5 py-3 font-semibold text-[#004ac6] shadow-sm transition hover:scale-105 active:scale-95"
-              >
-                <span className="material-symbols-outlined">category</span>
-                <span>Thêm danh mục</span>
-              </button>
-              <button
-                type="button"
-                onClick={openCreateProductForm}
-                className="flex items-center gap-2 rounded-xl bg-gradient-to-br from-[#9d4300] to-[#fd761a] px-6 py-3 font-semibold text-white shadow-xl shadow-orange-500/10 transition hover:scale-105 active:scale-95"
-              >
-                <span className="material-symbols-outlined">add</span>
-                <span>Thêm sản phẩm mới</span>
-              </button>
-            </div>
-          </div>
 
-          <div className="mb-10 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard label="Tổng sản phẩm" value={stats.totalProducts} helper="+ đang quản lý" />
-            <StatCard
-              label="Sắp hết hàng"
-              value={stats.outOfStock}
-              helper="Cần nhập thêm"
-              helperClass="text-[#9d4300]"
-            />
-            <StatCard label="Đang ẩn" value={stats.hidden} helper="Không hiển thị công khai" />
-            <div className="rounded-xl border border-[#004ac6]/5 bg-[#ededf9] p-6 md:col-span-2 xl:col-span-1">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="mb-4 text-xs font-bold uppercase tracking-widest text-[#434655]">
-                    Danh mục nổi bật
-                  </p>
-                  <span className="text-2xl font-extrabold [font-family:Manrope,system-ui,sans-serif]">
-                    {stats.topCategory}
-                  </span>
-                </div>
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#004ac6]/10 text-[#004ac6]">
-                  <span className="material-symbols-outlined">trending_up</span>
+            <div className="mb-10 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+              <StatCard
+                label="Tổng sản phẩm"
+                value={stats.totalProducts}
+                helper="+ đang quản lý"
+              />
+              <StatCard
+                label="Sắp hết hàng"
+                value={stats.outOfStock}
+                helper="Cần nhập thêm"
+                helperClass="text-[#9d4300]"
+              />
+              <StatCard
+                label="Đang ẩn"
+                value={stats.hidden}
+                helper="Không hiển thị công khai"
+              />
+              <div className="rounded-xl border border-[#004ac6]/5 bg-[#ededf9] p-6 md:col-span-2 xl:col-span-1">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="mb-4 text-xs font-bold uppercase tracking-widest text-[#434655]">
+                      Danh mục nổi bật
+                    </p>
+                    <span className="text-2xl font-extrabold [font-family:Manrope,system-ui,sans-serif]">
+                      {stats.topCategory}
+                    </span>
+                  </div>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#004ac6]/10 text-[#004ac6]">
+                    <span className="material-symbols-outlined">
+                      trending_up
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-[#c3c6d7]/10 bg-[#f3f3fe] p-2">
-            <CategoryFilterButton
-              active={!filterDraft.categoryId}
-              label="Tất cả sản phẩm"
-              onClick={() => setFilterDraft((prev) => ({ ...prev, categoryId: "" }))}
-            />
-            {categories.slice(0, 4).map((category) => (
+            <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-[#c3c6d7]/10 bg-[#f3f3fe] p-2">
               <CategoryFilterButton
-                key={category.id}
-                active={String(filterDraft.categoryId) === String(category.id)}
-                label={category.name}
+                active={!filterDraft.categoryId}
+                label="Tất cả sản phẩm"
                 onClick={() =>
-                  setFilterDraft((prev) => ({
-                    ...prev,
-                    categoryId: String(category.id),
-                  }))
+                  setFilterDraft((prev) => ({ ...prev, categoryId: "" }))
                 }
               />
-            ))}
-            <div className="ml-auto flex flex-wrap items-center gap-2 pr-2">
-              <span className="text-xs font-bold uppercase text-[#737686]">
-                Lọc theo:
-              </span>
-              <select
-                value={filterDraft.status}
-                onChange={(event) =>
-                  setFilterDraft((prev) => ({ ...prev, status: event.target.value }))
-                }
-                className="rounded-lg border border-[#c3c6d7]/30 bg-white px-3 py-2 text-sm font-semibold text-[#191b23] focus:ring-2 focus:ring-[#004ac6]"
-              >
-                <option value="">Trạng thái kho</option>
-                {statusOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <button type="button" onClick={applyFilters} className="azure-button">
-                Áp dụng
-              </button>
-              <button type="button" onClick={resetFilters} className="azure-button-muted">
-                Đặt lại
-              </button>
-            </div>
-          </div>
-
-          <div className="overflow-hidden rounded-2xl border border-[#c3c6d7]/10 bg-[#f3f3fe] shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left">
-                <thead>
-                  <tr className="bg-[#e7e7f3]">
-                    <TableHead>Tên sản phẩm</TableHead>
-                    <TableHead>Danh mục</TableHead>
-                    <TableHead>Giá</TableHead>
-                    <TableHead>Tồn kho</TableHead>
-                    <TableHead align="right">Thao tác</TableHead>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#c3c6d7]/20">
-                  {isLoading ? (
-                    <EmptyRow text="Đang tải sản phẩm..." />
-                  ) : products.length === 0 ? (
-                    <EmptyRow text="Không có sản phẩm phù hợp." />
-                  ) : (
-                    products.map((product) => (
-                      <ProductRow
-                        key={product.id}
-                        product={product}
-                        onEdit={() => openEditProductForm(product)}
-                        onDelete={() => handleDeleteProduct(product.id)}
-                      />
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex flex-col gap-4 border-t border-[#c3c6d7]/20 bg-[#e1e2ed]/30 px-6 py-6 md:flex-row md:items-center md:justify-between">
-              <p className="text-sm font-medium text-[#434655]">
-                Hiển thị{" "}
-                <span className="font-bold text-[#191b23]">
-                  {products.length ? pagination.page * pagination.size + 1 : 0} -{" "}
-                  {pagination.page * pagination.size + products.length}
-                </span>{" "}
-                trong số{" "}
-                <span className="font-bold text-[#191b23]">
-                  {pagination.totalElements}
-                </span>{" "}
-                sản phẩm
-              </p>
-              <div className="flex items-center gap-4">
+              {categories.slice(0, 4).map((category) => (
+                <CategoryFilterButton
+                  key={category.id}
+                  active={
+                    String(filterDraft.categoryId) === String(category.id)
+                  }
+                  label={category.name}
+                  onClick={() =>
+                    setFilterDraft((prev) => ({
+                      ...prev,
+                      categoryId: String(category.id),
+                    }))
+                  }
+                />
+              ))}
+              <div className="ml-auto flex flex-wrap items-center gap-2 pr-2">
+                <span className="text-xs font-bold uppercase text-[#737686]">
+                  Lọc theo:
+                </span>
+                <select
+                  value={filterDraft.status}
+                  onChange={(event) =>
+                    setFilterDraft((prev) => ({
+                      ...prev,
+                      status: event.target.value,
+                    }))
+                  }
+                  className="rounded-lg border border-[#c3c6d7]/30 bg-white px-3 py-2 text-sm font-semibold text-[#191b23] focus:ring-2 focus:ring-[#004ac6]"
+                >
+                  <option value="">Trạng thái kho</option>
+                  {statusOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
                 <button
                   type="button"
-                  disabled={pagination.page <= 0}
-                  onClick={() => loadProducts(pagination.page - 1)}
-                  className="flex items-center gap-1 text-sm font-bold text-[#191b23] transition disabled:cursor-not-allowed disabled:opacity-40"
+                  onClick={applyFilters}
+                  className="azure-button"
                 >
-                  <span className="material-symbols-outlined text-lg">
-                    chevron_left
-                  </span>
-                  Trước
+                  Áp dụng
                 </button>
-                <div className="flex items-center gap-1">
-                  <button className="h-8 w-8 rounded-lg bg-[#004ac6] text-xs font-bold text-white">
-                    {pagination.page + 1}
-                  </button>
-                  <span className="px-1 text-[#434655]">/</span>
-                  <span className="px-2 text-xs font-bold text-[#434655]">
-                    {pagination.totalPages}
-                  </span>
-                </div>
                 <button
                   type="button"
-                  disabled={pagination.page + 1 >= pagination.totalPages}
-                  onClick={() => loadProducts(pagination.page + 1)}
-                  className="flex items-center gap-1 text-sm font-bold text-[#004ac6] transition hover:translate-x-1 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-x-0"
+                  onClick={resetFilters}
+                  className="azure-button-muted"
                 >
-                  Tiếp
-                  <span className="material-symbols-outlined text-lg">
-                    chevron_right
-                  </span>
+                  Đặt lại
                 </button>
               </div>
             </div>
-          </div>
 
-          <CategoryPanel
-            categories={categories}
-            onAdd={openCreateCategoryForm}
-            onEdit={openEditCategoryForm}
-            onDelete={handleDeleteCategory}
-          />
-        </div>
+            <div className="overflow-hidden rounded-2xl border border-[#c3c6d7]/10 bg-[#f3f3fe] shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-left">
+                  <thead>
+                    <tr className="bg-[#e7e7f3]">
+                      <TableHead>Tên sản phẩm</TableHead>
+                      <TableHead>Danh mục</TableHead>
+                      <TableHead>Giá</TableHead>
+                      <TableHead>Tồn kho</TableHead>
+                      <TableHead align="right">Thao tác</TableHead>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#c3c6d7]/20">
+                    {isLoading ? (
+                      <EmptyRow text="Đang tải sản phẩm..." />
+                    ) : products.length === 0 ? (
+                      <EmptyRow text="Không có sản phẩm phù hợp." />
+                    ) : (
+                      products.map((product) => (
+                        <ProductRow
+                          key={product.id}
+                          product={product}
+                          onView={() => openProductDetail(product)}
+                          onEdit={() => openEditProductForm(product)}
+                          onDelete={() => handleDeleteProduct(product.id)}
+                        />
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex flex-col gap-4 border-t border-[#c3c6d7]/20 bg-[#e1e2ed]/30 px-6 py-6 md:flex-row md:items-center md:justify-between">
+                <p className="text-sm font-medium text-[#434655]">
+                  Hiển thị{" "}
+                  <span className="font-bold text-[#191b23]">
+                    {products.length
+                      ? pagination.page * pagination.size + 1
+                      : 0}{" "}
+                    - {pagination.page * pagination.size + products.length}
+                  </span>{" "}
+                  trong số{" "}
+                  <span className="font-bold text-[#191b23]">
+                    {pagination.totalElements}
+                  </span>{" "}
+                  sản phẩm
+                </p>
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    disabled={pagination.page <= 0}
+                    onClick={() => loadProducts(pagination.page - 1)}
+                    className="flex items-center gap-1 text-sm font-bold text-[#191b23] transition disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <span className="material-symbols-outlined text-lg">
+                      chevron_left
+                    </span>
+                    Trước
+                  </button>
+                  <div className="flex items-center gap-1">
+                    <button className="h-8 w-8 rounded-lg bg-[#004ac6] text-xs font-bold text-white">
+                      {pagination.page + 1}
+                    </button>
+                    <span className="px-1 text-[#434655]">/</span>
+                    <span className="px-2 text-xs font-bold text-[#434655]">
+                      {pagination.totalPages}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={pagination.page + 1 >= pagination.totalPages}
+                    onClick={() => loadProducts(pagination.page + 1)}
+                    className="flex items-center gap-1 text-sm font-bold text-[#004ac6] transition hover:translate-x-1 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-x-0"
+                  >
+                    Tiếp
+                    <span className="material-symbols-outlined text-lg">
+                      chevron_right
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <CategoryPanel
+              categories={categories}
+              onAdd={openCreateCategoryForm}
+              onEdit={openEditCategoryForm}
+              onDelete={handleDeleteCategory}
+            />
+          </div>
+        ) : activeAdminSection === "orders" ? (
+          <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-10">
+            <div className="mb-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h2 className="mb-2 text-4xl font-extrabold tracking-tight text-[#191b23] [font-family:Manrope,system-ui,sans-serif]">
+                  Quản lý Đơn hàng
+                </h2>
+                <p className="text-[#434655]">
+                  Xem danh sách đơn mới nhất, theo dõi trạng thái và cập nhật
+                  tiến trình giao hàng.
+                </p>
+              </div>
+              <div className="rounded-3xl border border-[#c3c6d7]/10 bg-white p-5">
+                <p className="text-xs uppercase tracking-widest text-[#434655]">
+                  Tổng đơn hàng
+                </p>
+                <p className="mt-2 text-3xl font-extrabold text-[#004ac6]">
+                  {adminOrders.length}
+                </p>
+                <p className="mt-1 text-sm text-[#434655]">
+                  Cập nhật mới nhất trước
+                </p>
+              </div>
+            </div>
+
+            <section className="overflow-hidden rounded-2xl border border-[#c3c6d7]/10 bg-[#f3f3fe] shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-left">
+                  <thead>
+                    <tr className="bg-[#e7e7f3]">
+                      <TableHead>Mã đơn hàng</TableHead>
+                      <TableHead>Khách hàng</TableHead>
+                      <TableHead>Trạng thái</TableHead>
+                      <TableHead>Ngày tạo</TableHead>
+                      <TableHead align="right">Tổng tiền</TableHead>
+                      <TableHead align="right">Thao tác</TableHead>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#c3c6d7]/20">
+                    {adminOrdersLoading ? (
+                      <EmptyRow colSpan={6} text="Đang tải đơn hàng..." />
+                    ) : adminOrdersError ? (
+                      <EmptyRow colSpan={6} text={adminOrdersError} />
+                    ) : adminOrders.length === 0 ? (
+                      <EmptyRow colSpan={6} text="Không có đơn hàng mới." />
+                    ) : (
+                      adminOrders.map((order) => (
+                        <AdminOrderRow
+                          key={order.orderId || order.id}
+                          order={order}
+                          onOpen={() => openAdminOrderDetail(order)}
+                        />
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            {selectedAdminOrderId && (
+              <AdminOrderDetailModal
+                order={selectedAdminOrder}
+                comments={selectedAdminOrderComments}
+                loading={selectedAdminOrderLoading}
+                error={selectedAdminOrderError}
+                onClose={closeAdminOrderDetail}
+                onStatusChange={handleAdminOrderStatusUpdate}
+                updating={orderStatusUpdating}
+              />
+            )}
+          </div>
         ) : activeAdminSection === "support" ? (
           <AdminSupportPage user={user} />
         ) : (
@@ -574,7 +831,10 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
       </button>
 
       {notification && (
-        <Toast notification={notification} onClose={() => setNotification(null)} />
+        <Toast
+          notification={notification}
+          onClose={() => setNotification(null)}
+        />
       )}
 
       {showProductForm && (
@@ -599,6 +859,84 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
           onSubmit={handleSubmitCategory}
           slugifyCategoryName={slugifyCategoryName}
         />
+      )}
+      {selectedDetailProduct && (
+        <ProductDetailAdminModal
+          product={selectedDetailProduct}
+          detailData={detailProductData}
+          loading={detailProductLoading}
+          error={detailProductError}
+          onClose={closeProductDetail}
+        />
+      )}
+    </div>
+  );
+}
+
+function AdminNotificationBell() {
+  const { notifications, unreadCount, markAllRead } =
+    useOrderNotifications() || {
+      notifications: [],
+      unreadCount: 0,
+      markAllRead: () => {},
+    };
+  const [open, setOpen] = useState(false);
+
+  function toggle() {
+    setOpen((v) => !v);
+    if (!open) markAllRead();
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={toggle}
+        className="relative rounded-full p-2 text-[#434655] hover:bg-[#ededf9]"
+        title="Thông báo"
+      >
+        <span className="material-symbols-outlined">notifications</span>
+        {unreadCount > 0 && (
+          <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs text-white">
+            {unreadCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-12 z-50 w-80 rounded-xl border bg-white p-3 shadow-lg">
+          <div className="mb-2 flex items-center justify-between">
+            <strong>Thông báo đơn hàng</strong>
+            <button
+              onClick={() => setOpen(false)}
+              className="text-sm text-slate-500"
+            >
+              Đóng
+            </button>
+          </div>
+          <div className="max-h-64 overflow-auto">
+            {notifications.length === 0 ? (
+              <div className="py-4 text-sm text-slate-500">
+                Không có thông báo
+              </div>
+            ) : (
+              notifications.map((n) => (
+                <div key={n.id} className="mb-2 rounded-md border p-2 text-sm">
+                  <div className="font-semibold">Đơn #{n.orderId}</div>
+                  <div className="text-xs text-slate-500">
+                    {new Date(n.createdAt).toLocaleString()}
+                  </div>
+                  <div className="mt-1">
+                    {new Intl.NumberFormat("vi-VN", {
+                      style: "currency",
+                      currency: "VND",
+                    }).format(n.total)}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -777,7 +1115,7 @@ function TableHead({ children, align = "left" }) {
   );
 }
 
-function ProductRow({ product, onEdit, onDelete }) {
+function ProductRow({ product, onView, onEdit, onDelete }) {
   const stock = Number(product.stockQuantity || 0);
   const stockPercent = Math.max(0, Math.min(100, stock));
   const lowStock = stock > 0 && stock <= 12;
@@ -836,7 +1174,11 @@ function ProductRow({ product, onEdit, onDelete }) {
           <div className="h-1.5 w-24 overflow-hidden rounded-full bg-[#e1e2ed]">
             <div
               className={`h-full ${
-                outOfStock ? "bg-[#ba1a1a]" : lowStock ? "bg-[#fd761a]" : "bg-[#007d55]"
+                outOfStock
+                  ? "bg-[#ba1a1a]"
+                  : lowStock
+                    ? "bg-[#fd761a]"
+                    : "bg-[#007d55]"
               }`}
               style={{ width: `${stockPercent}%` }}
             />
@@ -845,6 +1187,14 @@ function ProductRow({ product, onEdit, onDelete }) {
       </td>
       <td className="px-6 py-5 text-right">
         <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onView}
+            className="rounded-lg p-2 text-[#004ac6] transition-colors hover:bg-[#004ac6]/5"
+            title="Xem chi tiết"
+          >
+            <span className="material-symbols-outlined">visibility</span>
+          </button>
           <button
             type="button"
             onClick={onEdit}
@@ -865,13 +1215,324 @@ function ProductRow({ product, onEdit, onDelete }) {
   );
 }
 
-function EmptyRow({ text }) {
+function EmptyRow({ text, colSpan = 5 }) {
   return (
     <tr>
-      <td colSpan="5" className="px-6 py-12 text-center text-sm text-[#434655]">
+      <td
+        colSpan={colSpan}
+        className="px-6 py-12 text-center text-sm text-[#434655]"
+      >
         {text}
       </td>
     </tr>
+  );
+}
+
+function getOrderStatusLabel(status) {
+  const labels = {
+    PENDING: "Chờ xác nhận",
+    CONFIRMED: "Đã xác nhận",
+    PROCESSING: "Đang xử lý",
+    SHIPPED: "Đã giao",
+    DELIVERED: "Đã hoàn tất",
+  };
+  return labels[status] || status || "Chưa rõ";
+}
+
+function getOrderStatusColor(status) {
+  const colors = {
+    PENDING: "bg-[#fff4e5] text-[#b45309] border-[#fcd34d]/40",
+    CONFIRMED: "bg-[#e0f2fe] text-[#0c4a6e] border-[#38bdf8]/40",
+    PROCESSING: "bg-[#ede9fe] text-[#5b21b6] border-[#a78bfa]/40",
+    SHIPPED: "bg-[#ecfdf5] text-[#166534] border-[#4ade80]/40",
+    DELIVERED: "bg-[#f0fdf4] text-[#14532d] border-[#86efac]/40",
+  };
+  return colors[status] || "bg-[#f3f4f6] text-[#374151] border-[#d1d5db]/40";
+}
+
+function getNextOrderStatus(status) {
+  const transitions = {
+    PENDING: "CONFIRMED",
+    CONFIRMED: "PROCESSING",
+    PROCESSING: "SHIPPED",
+    SHIPPED: "DELIVERED",
+  };
+  return transitions[status] || null;
+}
+
+function AdminOrderRow({ order, onOpen }) {
+  const orderId = order.orderId || order.id || "N/A";
+  const customerLabel =
+    order.customerName || order.customerEmail || `User #${order.userId || "?"}`;
+  const totalAmount = order.totalAmount ?? order.total ?? 0;
+  return (
+    <tr className="transition-colors duration-150 hover:bg-white">
+      <td className="px-6 py-5 font-semibold text-[#191b23]">#{orderId}</td>
+      <td className="px-6 py-5 text-sm text-[#434655]">{customerLabel}</td>
+      <td className="px-6 py-5">
+        <span
+          className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getOrderStatusColor(order.status)}`}
+        >
+          {getOrderStatusLabel(order.status)}
+        </span>
+      </td>
+      <td className="px-6 py-5 text-sm text-[#434655]">
+        {order.createdAt ? new Date(order.createdAt).toLocaleString() : "-"}
+      </td>
+      <td className="px-6 py-5 font-semibold text-right text-[#191b23]">
+        {currencyFormatter.format(totalAmount)}
+      </td>
+      <td className="px-6 py-5 text-right">
+        <button
+          type="button"
+          onClick={onOpen}
+          className="rounded-lg bg-[#004ac6] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#003a8c]"
+        >
+          Chi tiết
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+function AdminOrderDetailModal({
+  order,
+  comments,
+  loading,
+  error,
+  onClose,
+  onStatusChange,
+  updating,
+}) {
+  const nextStatus = order ? getNextOrderStatus(order.status) : null;
+  const shippingAddress = order?.shippingAddress;
+  const addressText = shippingAddress
+    ? typeof shippingAddress === "string"
+      ? shippingAddress
+      : JSON.stringify(shippingAddress, null, 2)
+    : "Chưa có thông tin địa chỉ";
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const totalAmount = order?.totalAmount ?? order?.total ?? 0;
+
+  return (
+    <Modal onClose={onClose} maxWidth="max-w-5xl">
+      <div className="border-b border-[#c3c6d7]/20 bg-[#f3f3fe] px-6 py-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-[#004ac6]">
+              Chi tiết đơn hàng
+            </p>
+            <h3 className="mt-2 text-2xl font-extrabold text-[#191b23]">
+              Đơn #{order?.orderId || order?.id || "-"}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#191b23] transition hover:bg-[#ededf9]"
+          >
+            Đóng
+          </button>
+        </div>
+      </div>
+      <div className="grid gap-6 p-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="space-y-6">
+          {loading ? (
+            <div>Đang tải chi tiết đơn hàng...</div>
+          ) : error ? (
+            <div className="rounded-xl border border-red-200 bg-[#fef2f2] p-5 text-sm text-[#b91c1c]">
+              {error}
+            </div>
+          ) : order ? (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <InfoCard
+                  label="Mã đơn hàng"
+                  value={`#${order.orderId || order.id}`}
+                />
+                <InfoCard
+                  label="Trạng thái"
+                  value={getOrderStatusLabel(order.status)}
+                  badgeClass={getOrderStatusColor(order.status)}
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <InfoCard
+                  label="Ngày tạo"
+                  value={
+                    order.createdAt
+                      ? new Date(order.createdAt).toLocaleString()
+                      : "-"
+                  }
+                />
+                <InfoCard
+                  label="Khách hàng"
+                  value={
+                    order.customerName ||
+                    order.customerEmail ||
+                    `User #${order.userId || "?"}`
+                  }
+                />
+              </div>
+              <div className="rounded-3xl border border-slate-200 bg-white p-5">
+                <p className="text-sm font-semibold text-slate-950">
+                  Địa chỉ giao hàng
+                </p>
+                <pre className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">
+                  {addressText}
+                </pre>
+              </div>
+              <div className="rounded-3xl border border-slate-200 bg-white p-5">
+                <p className="text-sm font-semibold text-slate-950">Sản phẩm</p>
+                <div className="mt-4 space-y-3">
+                  {items.length === 0 ? (
+                    <div className="text-sm text-slate-500">
+                      Không có sản phẩm trong đơn.
+                    </div>
+                  ) : (
+                    items.map((item) => (
+                      <div
+                        key={`${order.orderId || order.id}-${item.productId}-${item.productName}`}
+                        className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-[#f8fafc] p-4"
+                      >
+                        <div>
+                          <p className="font-semibold text-slate-950">
+                            {item.productName || `Sản phẩm #${item.productId}`}
+                          </p>
+                          <p className="text-sm text-slate-500">
+                            Số lượng: {item.quantity}
+                          </p>
+                        </div>
+                        <p className="text-sm font-semibold text-slate-950">
+                          {currencyFormatter.format(item.price ?? 0)}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+              <div className="rounded-3xl border border-slate-200 bg-white p-5">
+                <p className="text-sm font-semibold text-slate-950">
+                  Bình luận đơn hàng
+                </p>
+                <div className="mt-4 space-y-4">
+                  {comments.length === 0 ? (
+                    <div className="text-sm text-slate-500">
+                      Chưa có bình luận nào cho đơn hàng này.
+                    </div>
+                  ) : (
+                    comments.map((comment) => (
+                      <div
+                        key={comment.id}
+                        className="rounded-2xl border border-slate-200 bg-[#f8fafc] p-4"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-slate-950">
+                              Khách hàng #{comment.userId}
+                              {comment.productId
+                                ? ` — Sản phẩm #${comment.productId}`
+                                : ""}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {formatDateTime(comment.createdAt)}
+                            </p>
+                          </div>
+                          {comment.rating != null && (
+                            <span className="rounded-full bg-[#e2e8f0] px-3 py-1 text-xs font-semibold text-slate-700">
+                              {comment.rating}/5
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-3 text-sm text-slate-700">
+                          {comment.comment || "Không có nội dung."}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="text-sm text-slate-500">
+              Chọn đơn hàng để xem chi tiết.
+            </div>
+          )}
+        </div>
+        <div className="space-y-5">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6">
+            <p className="text-sm font-semibold text-slate-950">
+              Tổng quan đơn hàng
+            </p>
+            <div className="mt-4 space-y-3 text-sm text-slate-600">
+              <div className="flex justify-between gap-4">
+                <span>Tổng tiền</span>
+                <span className="font-semibold text-slate-950">
+                  {currencyFormatter.format(totalAmount)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span>Phương thức thanh toán</span>
+                <span className="font-semibold text-slate-950">
+                  {order?.paymentMethod || "Chưa rõ"}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="rounded-3xl border border-slate-200 bg-white p-6">
+            <p className="text-sm font-semibold text-slate-950">Hành động</p>
+            <div className="mt-4 space-y-4">
+              {nextStatus ? (
+                <button
+                  type="button"
+                  onClick={() => onStatusChange(nextStatus)}
+                  disabled={updating}
+                  className="w-full rounded-2xl bg-[#004ac6] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#003a8c] disabled:cursor-not-allowed disabled:bg-[#9fb9d8]"
+                >
+                  {updating
+                    ? "Đang cập nhật..."
+                    : `Chuyển sang ${getOrderStatusLabel(nextStatus)}`}
+                </button>
+              ) : (
+                <div className="rounded-2xl bg-[#f3f4f6] px-4 py-3 text-sm text-slate-600">
+                  Đơn hàng đã hoàn tất, không thể thay đổi trạng thái nữa.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function AdminInfoCard({ label, value, badgeClass }) {
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-[#f8fafc] p-4">
+      <div className="text-xs uppercase tracking-widest text-[#6b7280]">
+        {label}
+      </div>
+      <div
+        className={`mt-3 text-sm font-semibold text-slate-950 ${badgeClass ? "inline-flex rounded-full px-3 py-1" : ""}`}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function InfoCard({ label, value, badgeClass }) {
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-4">
+      <div className="text-xs uppercase tracking-widest text-[#6b7280]">
+        {label}
+      </div>
+      <div
+        className={`mt-3 text-sm font-semibold text-slate-950 ${badgeClass ? "inline-flex rounded-full px-3 py-1" : ""}`}
+      >
+        {value}
+      </div>
+    </div>
   );
 }
 
@@ -898,7 +1559,9 @@ function CategoryPanel({ categories, onAdd, onEdit, onDelete }) {
             className="flex items-center justify-between gap-3 rounded-xl border border-[#c3c6d7]/20 bg-[#faf8ff] p-4"
           >
             <div className="min-w-0">
-              <p className="truncate font-bold text-[#191b23]">{category.name}</p>
+              <p className="truncate font-bold text-[#191b23]">
+                {category.name}
+              </p>
               <p className="truncate text-xs text-[#434655]">
                 {category.slug || "no-slug"}
               </p>
@@ -916,7 +1579,9 @@ function CategoryPanel({ categories, onAdd, onEdit, onDelete }) {
                 onClick={() => onDelete(category.id)}
                 className="rounded-lg p-2 text-[#ba1a1a] hover:bg-[#ba1a1a]/5"
               >
-                <span className="material-symbols-outlined text-lg">delete</span>
+                <span className="material-symbols-outlined text-lg">
+                  delete
+                </span>
               </button>
             </div>
           </div>
@@ -961,7 +1626,10 @@ function ProductModal({
               <select
                 value={form.categoryId}
                 onChange={(event) =>
-                  setForm((prev) => ({ ...prev, categoryId: event.target.value }))
+                  setForm((prev) => ({
+                    ...prev,
+                    categoryId: event.target.value,
+                  }))
                 }
                 className="azure-input"
               >
@@ -992,7 +1660,10 @@ function ProductModal({
                 min="0"
                 value={form.stockQuantity}
                 onChange={(event) =>
-                  setForm((prev) => ({ ...prev, stockQuantity: event.target.value }))
+                  setForm((prev) => ({
+                    ...prev,
+                    stockQuantity: event.target.value,
+                  }))
                 }
                 className="azure-input"
               />
@@ -1018,7 +1689,10 @@ function ProductModal({
               rows="7"
               value={form.description}
               onChange={(event) =>
-                setForm((prev) => ({ ...prev, description: event.target.value }))
+                setForm((prev) => ({
+                  ...prev,
+                  description: event.target.value,
+                }))
               }
               className="azure-input min-h-40 resize-y"
             />
@@ -1035,23 +1709,294 @@ function ProductModal({
           </div>
           <ProductImageUpload
             initialImage={form.imageUrl}
-            onImageUpload={(imageUrl) => setForm((prev) => ({ ...prev, imageUrl }))}
+            onImageUpload={(imageUrl) =>
+              setForm((prev) => ({ ...prev, imageUrl }))
+            }
           />
           {form.imageUrl && (
             <p className="break-all rounded-xl border border-[#007d55]/20 bg-[#007d55]/5 px-4 py-3 text-xs text-[#006242]">
               {form.imageUrl}
             </p>
           )}
+          <AdminField label="Ảnh mô tả">
+            <textarea
+              rows="5"
+              value={form.descriptionImageUrlsText}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  descriptionImageUrlsText: event.target.value,
+                }))
+              }
+              className="azure-input min-h-32 resize-y"
+              placeholder="Mỗi URL ảnh trên một dòng"
+            />
+          </AdminField>
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="azure-button-muted">
+            <button
+              type="button"
+              onClick={onClose}
+              className="azure-button-muted"
+            >
               Hủy
             </button>
             <button type="submit" disabled={isSaving} className="azure-button">
-              {isSaving ? "Đang lưu..." : selectedProduct ? "Cập nhật" : "Tạo sản phẩm"}
+              {isSaving
+                ? "Đang lưu..."
+                : selectedProduct
+                  ? "Cập nhật"
+                  : "Tạo sản phẩm"}
             </button>
           </div>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+function ProductDetailAdminModal({
+  product,
+  detailData,
+  loading,
+  error,
+  onClose,
+}) {
+  const productData = detailData?.product || product || {};
+  const comments = Array.isArray(detailData?.comments)
+    ? detailData.comments
+    : [];
+  const ratingStats = detailData?.ratingStats;
+  const images = [
+    productData.imageUrl,
+    ...(Array.isArray(productData.descriptionImageUrls)
+      ? productData.descriptionImageUrls
+      : []),
+  ].filter(Boolean);
+
+  const averageRating =
+    ratingStats?.averageRating ??
+    (comments.length
+      ? comments.reduce(
+          (sum, comment) => sum + (Number(comment.rating) || 0),
+          0,
+        ) / comments.length
+      : 0);
+
+  const totalComments = ratingStats?.totalComments ?? comments.length;
+
+  return (
+    <Modal onClose={onClose} maxWidth="max-w-6xl">
+      <div className="border-b border-[#c3c6d7]/20 bg-[#f3f3fe] px-6 py-5">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-[#004ac6]">
+              Chi tiết sản phẩm (Admin)
+            </p>
+            <h3 className="mt-2 text-2xl font-extrabold text-[#191b23] [font-family:Manrope,system-ui,sans-serif]">
+              {productData.name || "Sản phẩm"}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#191b23] transition hover:bg-[#ededf9]"
+          >
+            Đóng
+          </button>
+        </div>
+      </div>
+      <div className="grid gap-6 p-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="space-y-6">
+          <div className="aspect-[4/3] overflow-hidden rounded-3xl bg-[#f3f3fe]">
+            {images[0] ? (
+              <img
+                src={images[0]}
+                alt={productData.name}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-slate-400">
+                Chưa có ảnh sản phẩm
+              </div>
+            )}
+          </div>
+          {images.length > 1 && (
+            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+              {images.map((imageUrl, index) => (
+                <div
+                  key={`${imageUrl}-${index}`}
+                  className="aspect-square overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
+                >
+                  <img
+                    src={imageUrl}
+                    alt={`${productData.name || "Sản phẩm"} ${index + 1}`}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="rounded-3xl border border-slate-200 bg-white p-6">
+            <p className="text-sm font-semibold text-slate-950">Mô tả</p>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              {productData.description || "Không có mô tả."}
+            </p>
+          </div>
+        </div>
+        <div className="space-y-5">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-widest text-[#434655]">
+                  Giá bán
+                </p>
+                <p className="mt-3 text-3xl font-bold text-[#004ac6]">
+                  {currencyFormatter.format(productData.price || 0)}
+                </p>
+              </div>
+              <div className="space-y-1 text-right">
+                <p className="text-xs uppercase tracking-widest text-[#434655]">
+                  Trạng thái
+                </p>
+                <p className="font-semibold text-[#191b23]">
+                  {productData.status === "HIDDEN" ? "Đang ẩn" : "Đang bán"}
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 flex items-center gap-3">
+              <RatingStars rating={averageRating} size="text-xl" />
+              <div>
+                <p className="text-sm font-semibold text-slate-950">
+                  {averageRating ? averageRating.toFixed(1) : "Chưa có"} / 5
+                </p>
+                <p className="text-xs text-slate-500">
+                  {comments.length} đánh giá
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="rounded-3xl border border-slate-200 bg-white p-6">
+            <p className="text-sm font-semibold text-slate-950">
+              Thông tin nhanh
+            </p>
+            <div className="mt-4 space-y-3 text-sm text-slate-600">
+              <div className="flex justify-between gap-4">
+                <span>Danh mục</span>
+                <span className="font-semibold text-slate-950">
+                  {productData.category?.name || "Chưa phân loại"}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span>Tồn kho</span>
+                <span className="font-semibold text-slate-950">
+                  {productData.stockQuantity ?? 0}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span>ID sản phẩm</span>
+                <span className="font-semibold text-slate-950">
+                  PRD-{productData.id}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="rounded-3xl border border-slate-200 bg-white p-6">
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-[#434655]">
+              Bình luận khách hàng
+            </p>
+            <h3 className="mt-2 text-xl font-extrabold text-[#191b23]">
+              {totalComments > 0 ? "Phản hồi gần đây" : "Chưa có phản hồi"}
+            </h3>
+          </div>
+          <span className="text-sm text-slate-500">
+            {loading ? "Đang tải..." : `${totalComments} bình luận`}
+          </span>
+        </div>
+
+        {/* Rating Distribution */}
+        {ratingStats && totalComments > 0 && (
+          <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="flex items-start gap-6">
+              <div className="flex flex-col items-center">
+                <p className="text-4xl font-bold text-[#004ac6]">
+                  {averageRating.toFixed(1)}
+                </p>
+                <div className="mt-2 flex gap-1">
+                  <RatingStars rating={averageRating} size="text-lg" />
+                </div>
+                <p className="mt-2 text-xs font-medium text-slate-600">
+                  {totalComments} đánh giá
+                </p>
+              </div>
+              <div className="flex-1 space-y-2">
+                {[5, 4, 3, 2, 1].map((star) => {
+                  const count = ratingStats[`ratingCount${star}Star`] || 0;
+                  const percentage =
+                    totalComments > 0 ? (count / totalComments) * 100 : 0;
+                  return (
+                    <div key={star} className="flex items-center gap-2">
+                      <span className="w-10 text-right text-sm font-medium text-slate-600">
+                        {star} ★
+                      </span>
+                      <div className="h-2 flex-1 rounded-full bg-slate-200">
+                        <div
+                          className="h-full rounded-full bg-yellow-400"
+                          style={{ width: `${percentage}%` }}
+                        ></div>
+                      </div>
+                      <span className="w-12 text-right text-xs text-slate-500">
+                        {count} ({percentage.toFixed(0)}%)
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
+            Đang tải chi tiết sản phẩm...
+          </div>
+        ) : error ? (
+          <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700">
+            {error}
+          </div>
+        ) : comments.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
+            Chưa có bình luận nào cho sản phẩm này.
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {comments.map((comment) => (
+              <div
+                key={comment.id}
+                className="rounded-3xl border border-slate-200 bg-slate-50 p-5"
+              >
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-950">
+                      Khách hàng #{comment.userId}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {formatDateTime(comment.createdAt)}
+                    </p>
+                  </div>
+                  <RatingStars rating={comment.rating} size="text-lg" />
+                </div>
+                <p className="text-sm leading-6 text-slate-600">
+                  {comment.comment}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </Modal>
   );
 }
@@ -1098,15 +2043,40 @@ function CategoryModal({
           />
         </AdminField>
         <div className="flex justify-end gap-3">
-          <button type="button" onClick={onClose} className="azure-button-muted">
+          <button
+            type="button"
+            onClick={onClose}
+            className="azure-button-muted"
+          >
             Hủy
           </button>
-          <button type="submit" disabled={isCategorySaving} className="azure-button">
+          <button
+            type="submit"
+            disabled={isCategorySaving}
+            className="azure-button"
+          >
             {isCategorySaving ? "Đang lưu..." : "Lưu danh mục"}
           </button>
         </div>
       </form>
     </Modal>
+  );
+}
+
+function RatingStars({ rating = 0, size = "text-lg" }) {
+  const rounded = Math.round(Number(rating) || 0);
+  return (
+    <div className="flex items-center text-[#fd761a]">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <span
+          key={star}
+          className={`material-symbols-outlined ${size}`}
+          style={{ fontVariationSettings: `'FILL' ${star <= rounded ? 1 : 0}` }}
+        >
+          star
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -1153,7 +2123,9 @@ function Toast({ notification, onClose }) {
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="font-extrabold">{isError ? "Có lỗi xảy ra" : "Thành công"}</p>
+            <p className="font-extrabold">
+              {isError ? "Có lỗi xảy ra" : "Thành công"}
+            </p>
             <p className="mt-1">{notification.text}</p>
           </div>
           <button type="button" onClick={onClose} className="font-extrabold">

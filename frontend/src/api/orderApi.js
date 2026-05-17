@@ -8,7 +8,18 @@ const PRODUCT_SERVICE_URL =
   import.meta.env.VITE_PRODUCT_SERVICE_URL || "http://localhost:3003";
 const API_BASE_URL = `${API_GATEWAY_URL.replace(/\/$/, "")}/api`;
 const ORDER_API_BASE_URL = `${ORDER_SERVICE_URL.replace(/\/$/, "")}/api`;
-const PRODUCT_API_BASE_URL = `${PRODUCT_SERVICE_URL.replace(/\/$/, "")}/api`;
+const PRODUCT_SERVICE_FALLBACK_URLS = (
+  import.meta.env.VITE_PRODUCT_SERVICE_FALLBACK_URLS || "http://localhost:8082"
+)
+  .split(",")
+  .map((url) => url.trim())
+  .filter(Boolean);
+const PRODUCT_API_BASE_URLS = [
+  PRODUCT_SERVICE_URL,
+  ...PRODUCT_SERVICE_FALLBACK_URLS,
+]
+  .map((url) => `${url.replace(/\/$/, "")}/api`)
+  .filter((url, index, urls) => urls.indexOf(url) === index);
 
 function getAuthHeaders(guestToken) {
   const headers = {};
@@ -36,16 +47,35 @@ function shouldFallbackToDirectApi(error) {
 }
 
 async function requestWithFallback(path, options = {}, service = "order") {
-  const directBaseUrl =
-    service === "product" ? PRODUCT_API_BASE_URL : ORDER_API_BASE_URL;
+  const directBaseUrls =
+    service === "product" ? PRODUCT_API_BASE_URLS : [ORDER_API_BASE_URL];
 
   try {
-    return await fetch(`${directBaseUrl}${path}`, options);
+    for (const baseUrl of directBaseUrls) {
+      try {
+        return await fetch(`${baseUrl}${path}`, options);
+      } catch {
+        // Try next direct service URL before gateway fallback.
+      }
+    }
+    throw new Error("Direct service unavailable");
   } catch (error) {
     if (!API_GATEWAY_URL) {
       throw error;
     }
-    return fetch(`${API_BASE_URL}${path}`, options);
+    try {
+      return await fetch(`${API_BASE_URL}${path}`, options);
+    } catch {
+      const serviceName =
+        service === "product" ? "product-service" : "order-service";
+      const serviceUrl =
+        service === "product"
+          ? PRODUCT_API_BASE_URLS.join(", ")
+          : ORDER_SERVICE_URL;
+      throw new Error(
+        `Không kết nối được ${serviceName}. Kiểm tra service đang chạy tại ${serviceUrl}.`,
+      );
+    }
   }
 }
 
@@ -174,6 +204,56 @@ export async function getOrder(orderId) {
   return handleResponse(response);
 }
 
+export async function getOrderComments(orderId) {
+  const response = await requestWithFallback(`/orders/${orderId}/comments`, {
+    headers: getAuthHeaders(),
+    cache: "no-store",
+  });
+  return handleResponse(response);
+}
+
+export async function getOrderProductDetail(userId, productId) {
+  const params = new URLSearchParams();
+  if (userId) {
+    params.set("userId", userId);
+  }
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const response = await requestWithFallback(
+    `/orders/products/${productId}/details${query}`,
+    {
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    },
+  );
+  return handleResponse(response);
+}
+
+export async function getProductDetailWithComments(productId) {
+  const response = await requestWithFallback(
+    `/admin/products/${productId}/details-with-comments`,
+    {
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    },
+  );
+  return handleResponse(response);
+}
+
+export async function addProductComment(userId, productId, commentData) {
+  const response = await requestWithFallback(
+    `/orders/users/${userId}/products/${productId}/comments`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify(commentData),
+    },
+  );
+  return handleResponse(response);
+}
+
 export async function updateOrderStatus(orderId, status) {
   const response = await requestWithFallback(`/orders/${orderId}/status`, {
     method: "PATCH",
@@ -208,6 +288,10 @@ export default {
   getOrdersByUser,
   getAllOrders,
   getOrder,
+  getOrderComments,
+  getOrderProductDetail,
+  getProductDetailWithComments,
+  addProductComment,
   updateOrderStatus,
   cancelOrder,
   mergeGuestCart,
