@@ -25,4 +25,4 @@ management:
         include: health,info
 
 server:
-  port: ${SERVER_PORT:8082}
+  port: ${SERVER_PORT:3003}

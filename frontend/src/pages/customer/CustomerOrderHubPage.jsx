@@ -3,9 +3,12 @@ import { getProfile, updateProfile } from "../../api/authApi";
 import { getCategories, getProducts } from "../../api/productApi";
 import orderApi from "../../api/orderApi";
 import OrderToast from "./orders/components/OrderToast";
+import OrderDetailModal from "../../components/OrderDetailModal";
+import { useOrderNotifications } from "../../context/OrderNotificationContext";
 import OrderCartPage from "./orders/pages/OrderCartPage";
 import OrderCatalogPage from "./orders/pages/OrderCatalogPage";
 import OrderHistoryPage from "./orders/pages/OrderHistoryPage";
+import ProductDetailSection from "./orders/components/ProductDetailSection";
 import { getStatusLabel, sortOrdersNewestFirst } from "./orders/orderUtils";
 
 const GUEST_TOKEN_KEY = "guestToken";
@@ -86,6 +89,7 @@ export default function CustomerOrderHubPage({ user }) {
     return token;
   });
   const [activeTab, setActiveTab] = useState("catalog");
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [maxPrice, setMaxPrice] = useState(50000);
@@ -100,6 +104,10 @@ export default function CustomerOrderHubPage({ user }) {
   });
   const [checkout, setCheckout] = useState(emptyCheckout);
   const [notification, setNotification] = useState(null);
+  const { openedOrderId, closeOrder } = useOrderNotifications() || {
+    openedOrderId: null,
+    closeOrder: () => {},
+  };
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [cartLoading, setCartLoading] = useState(false);
   const [ordersLoading, setOrdersLoading] = useState(false);
@@ -133,6 +141,8 @@ export default function CustomerOrderHubPage({ user }) {
     const timer = window.setTimeout(() => setNotification(null), 3400);
     return () => window.clearTimeout(timer);
   }, [notification]);
+
+  // admin-initiated open order handled by OrderNotificationContext.openOrder
 
   useEffect(() => {
     if (!userId) {
@@ -433,6 +443,11 @@ export default function CustomerOrderHubPage({ user }) {
     }
   }
 
+  function handleViewProduct(product) {
+    setSelectedProduct(product);
+    setActiveTab("product-detail");
+  }
+
   async function handleQuantityChange(productId, quantity) {
     if (!userId) {
       // Guest: update on server
@@ -645,6 +660,16 @@ export default function CustomerOrderHubPage({ user }) {
             updatingOrderId={updatingOrderId}
           />
         );
+      case "product-detail":
+        return (
+          <ProductDetailSection
+            product={selectedProduct}
+            userId={userId}
+            updatingProductId={updatingProductId}
+            onBack={() => setActiveTab("catalog")}
+            onAddToCart={handleAddToCart}
+          />
+        );
       case "catalog":
       default:
         return (
@@ -678,6 +703,7 @@ export default function CustomerOrderHubPage({ user }) {
             }}
             updatingProductId={updatingProductId}
             onAddToCart={handleAddToCart}
+            onViewProduct={handleViewProduct}
           />
         );
     }
@@ -711,6 +737,20 @@ export default function CustomerOrderHubPage({ user }) {
         notification={notification}
         onClose={() => setNotification(null)}
       />
+      {openedOrderId && (
+        <OrderDetailModal
+          orderId={openedOrderId}
+          onClose={() => {
+            closeOrder();
+            try {
+              window.history.pushState({}, "", "/");
+              window.dispatchEvent(new PopStateEvent("popstate"));
+            } catch {
+              // ignore
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

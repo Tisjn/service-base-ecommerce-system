@@ -2,6 +2,7 @@ package com.dtpshop.productservice.dto;
 
 import jakarta.validation.constraints.Min;
 import java.math.BigDecimal;
+import java.util.List;
 import lombok.Data;
 
 @Data
@@ -17,6 +18,7 @@ public class ProductUpdateRequest {
     private Integer stockQuantity;
 
     private String imageUrl;
+    private List<String> descriptionImageUrls;
     private Integer categoryId;
     private String status;
 }

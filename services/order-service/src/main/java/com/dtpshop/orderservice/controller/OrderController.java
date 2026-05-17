@@ -1,8 +1,12 @@
 package com.dtpshop.orderservice.controller;
 
 import com.dtpshop.orderservice.dto.CartItemDto;
+import com.dtpshop.orderservice.dto.OrderProductDetailDto;
 import com.dtpshop.orderservice.dto.OrderRequestDto;
 import com.dtpshop.orderservice.dto.OrderResponseDto;
+import com.dtpshop.orderservice.dto.ProductCommentRequest;
+import com.dtpshop.orderservice.dto.ProductCommentResponse;
+import com.dtpshop.orderservice.dto.ProductDetailWithCommentsDto;
 import com.dtpshop.orderservice.dto.QuantityUpdateDto;
 import com.dtpshop.orderservice.dto.StatusUpdateDto;
 import com.dtpshop.orderservice.model.Order;
@@ -101,6 +105,37 @@ public class OrderController {
     public ResponseEntity<OrderResponseDto> getOrder(@PathVariable("orderId") Long orderId) {
         Order order = orderService.getOrder(orderId);
         return ResponseEntity.ok(toResponse(order));
+    }
+
+    @GetMapping("/orders/{orderId}/comments")
+    public ResponseEntity<List<ProductCommentResponse>> getOrderComments(@PathVariable("orderId") Long orderId) {
+        return ResponseEntity.ok(orderService.getOrderComments(orderId));
+    }
+
+    @GetMapping("/orders/products/{productId}/details")
+    public ResponseEntity<OrderProductDetailDto> getOrderProductDetail(
+            @PathVariable("productId") Long productId,
+            @RequestParam(value = "userId", required = false) Long userId) {
+        return ResponseEntity.ok(orderService.getOrderProductDetail(userId, productId));
+    }
+
+    @GetMapping("/admin/products/{productId}/details-with-comments")
+    public ResponseEntity<ProductDetailWithCommentsDto> getProductDetailWithComments(
+            @PathVariable("productId") Long productId) {
+        ProductDetailWithCommentsDto detail = orderService.getProductDetailWithComments(productId);
+        if (detail == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(detail);
+    }
+
+    @PostMapping("/orders/users/{userId}/products/{productId}/comments")
+    public ResponseEntity<ProductCommentResponse> addProductComment(
+            @PathVariable("userId") Long userId,
+            @PathVariable("productId") Long productId,
+            @Valid @RequestBody ProductCommentRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(orderService.addProductComment(userId, productId, request));
     }
 
     @PatchMapping("/orders/{orderId}/status")

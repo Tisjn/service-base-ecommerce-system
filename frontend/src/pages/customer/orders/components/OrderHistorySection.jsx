@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import orderApi from "../../../../api/orderApi";
 import {
   canCustomerCancel,
   currencyFormatter,
@@ -51,6 +52,17 @@ export default function OrderHistorySection({
   updatingOrderId,
 }) {
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [detailState, setDetailState] = useState({
+    open: false,
+    loading: false,
+    error: "",
+    order: null,
+    item: null,
+    data: null,
+  });
+  const [commentText, setCommentText] = useState("");
+  const [rating, setRating] = useState(5);
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
 
   const productLookup = useMemo(
     () =>
@@ -80,6 +92,77 @@ export default function OrderHistorySection({
   }, [orders, statusFilter]);
 
   const statusOptions = ["ALL", ...orderStatusOptions];
+
+  async function openProductDetail(order, item) {
+    setDetailState({
+      open: true,
+      loading: true,
+      error: "",
+      order,
+      item,
+      data: null,
+    });
+    setCommentText("");
+    setRating(5);
+    try {
+      const data = await orderApi.getOrderProductDetail(userId, item.productId);
+      setDetailState({
+        open: true,
+        loading: false,
+        error: "",
+        order,
+        item,
+        data,
+      });
+    } catch (error) {
+      setDetailState({
+        open: true,
+        loading: false,
+        error: error.message || "Khong tai duoc chi tiet san pham",
+        order,
+        item,
+        data: null,
+      });
+    }
+  }
+
+  async function submitProductComment(event) {
+    event.preventDefault();
+    const canComment =
+      detailState.order?.status === "DELIVERED" &&
+      detailState.data?.purchasedByUser;
+    if (
+      !detailState.item ||
+      !detailState.order ||
+      !commentText.trim() ||
+      !canComment
+    ) {
+      return;
+    }
+
+    setCommentSubmitting(true);
+    try {
+      await orderApi.addProductComment(userId, detailState.item.productId, {
+        orderId: detailState.order.orderId,
+        rating,
+        comment: commentText.trim(),
+      });
+      const data = await orderApi.getOrderProductDetail(
+        userId,
+        detailState.item.productId,
+      );
+      setDetailState((prev) => ({ ...prev, data }));
+      setCommentText("");
+      setRating(5);
+    } catch (error) {
+      setDetailState((prev) => ({
+        ...prev,
+        error: error.message || "Khong gui duoc binh luan",
+      }));
+    } finally {
+      setCommentSubmitting(false);
+    }
+  }
 
   return (
     <div className="space-y-6 w-full">
@@ -258,6 +341,13 @@ export default function OrderHistorySection({
                               <p className="mt-1 text-lg font-semibold text-slate-950">
                                 {currencyFormatter.format(subtotal)}
                               </p>
+                              <button
+                                type="button"
+                                onClick={() => openProductDetail(order, item)}
+                                className="mt-3 rounded-2xl border border-orange-200 bg-white px-3 py-2 text-xs font-semibold text-orange-700 transition hover:bg-orange-50"
+                              >
+                                Chi tiết
+                              </button>
                             </div>
                           </div>
                         );
@@ -285,6 +375,224 @@ export default function OrderHistorySection({
           </div>
         </>
       )}
+      <ProductDetailModal
+        state={detailState}
+        productLookup={productLookup}
+        commentText={commentText}
+        rating={rating}
+        commentSubmitting={commentSubmitting}
+        onClose={() =>
+          setDetailState({
+            open: false,
+            loading: false,
+            error: "",
+            order: null,
+            item: null,
+            data: null,
+          })
+        }
+        onCommentTextChange={setCommentText}
+        onRatingChange={setRating}
+        onSubmitComment={submitProductComment}
+      />
+    </div>
+  );
+}
+
+function ProductDetailModal({
+  state,
+  productLookup,
+  commentText,
+  rating,
+  commentSubmitting,
+  onClose,
+  onCommentTextChange,
+  onRatingChange,
+  onSubmitComment,
+}) {
+  if (!state.open) {
+    return null;
+  }
+
+  const fallbackProduct = productLookup[state.item?.productId] || {};
+  const product = state.data?.product || fallbackProduct;
+  const comments = state.data?.comments || [];
+  const canComment =
+    state.order?.status === "DELIVERED" && Boolean(state.data?.purchasedByUser);
+  const [hoverRating, setHoverRating] = useState(null);
+  const mainImage = product?.imageUrl || fallbackProduct?.imageUrl || "";
+  const descriptionImages = Array.isArray(product?.descriptionImageUrls)
+    ? product.descriptionImageUrls.filter(Boolean)
+    : [];
+  const images = [mainImage, ...descriptionImages].filter(Boolean);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+      <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-orange-600">
+              Chi tiết sản phẩm
+            </p>
+            <h3 className="mt-1 text-xl font-bold text-slate-950">
+              {product?.name || state.item?.productName || "Sản phẩm"}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
+          >
+            Đóng
+          </button>
+        </div>
+
+        <div className="grid gap-6 p-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="space-y-4">
+            <div className="aspect-[4/3] overflow-hidden rounded-3xl bg-slate-100">
+              {mainImage ? (
+                <img
+                  src={mainImage}
+                  alt={product?.name || state.item?.productName}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-slate-400">
+                  Chưa có ảnh sản phẩm
+                </div>
+              )}
+            </div>
+            {images.length > 1 && (
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+                {images.map((imageUrl, index) => (
+                  <div
+                    key={`${imageUrl}-${index}`}
+                    className="aspect-square overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
+                  >
+                    <img
+                      src={imageUrl}
+                      alt={`${product?.name || "Sản phẩm"} ${index + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-5">
+            {state.loading ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
+                Đang tải chi tiết sản phẩm...
+              </div>
+            ) : null}
+            {state.error ? (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+                {state.error}
+              </div>
+            ) : null}
+
+            <div>
+              <p className="text-2xl font-bold text-slate-950">
+                {currencyFormatter.format(
+                  product?.price || state.item?.price || 0,
+                )}
+              </p>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                {product?.description || "Chưa có mô tả chi tiết."}
+              </p>
+            </div>
+
+            {state.data?.purchasedByUser && !canComment && (
+              <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                Chỉ những đơn hàng đã giao mới được phép bình luận.
+              </div>
+            )}
+
+            {canComment && (
+              <form
+                onSubmit={onSubmitComment}
+                className="rounded-3xl border border-slate-200 bg-slate-50 p-4"
+              >
+                <p className="font-semibold text-slate-950">
+                  Bình luận sau khi mua
+                </p>
+                <div className="mt-3 flex items-center gap-3">
+                  <label className="text-sm text-slate-600">Đánh giá</label>
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => onRatingChange(v)}
+                        onMouseEnter={() => setHoverRating(v)}
+                        onMouseLeave={() => setHoverRating(null)}
+                        className="material-symbols-outlined text-lg text-[#fd761a]"
+                        style={{
+                          fontVariationSettings: `'FILL' ${+((hoverRating ?? rating) >= v)}`,
+                        }}
+                        aria-label={`${v} sao`}
+                      >
+                        star
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <textarea
+                  value={commentText}
+                  onChange={(event) => onCommentTextChange(event.target.value)}
+                  rows={3}
+                  maxLength={1000}
+                  className="mt-3 w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-800 outline-none transition focus:border-orange-400"
+                  placeholder="Chia sẻ trải nghiệm của bạn về sản phẩm"
+                />
+                <button
+                  type="submit"
+                  disabled={commentSubmitting || !commentText.trim()}
+                  className="mt-3 rounded-2xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {commentSubmitting ? "Đang gửi..." : "Gửi bình luận"}
+                </button>
+              </form>
+            )}
+
+            <div>
+              <p className="font-semibold text-slate-950">
+                Bình luận của khách hàng
+              </p>
+              <div className="mt-3 space-y-3">
+                {comments.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
+                    Chưa có bình luận nào cho sản phẩm này.
+                  </div>
+                ) : (
+                  comments.map((comment) => (
+                    <div
+                      key={comment.id}
+                      className="rounded-2xl border border-slate-200 bg-white p-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-slate-950">
+                          Khách hàng #{comment.userId}
+                        </p>
+                        <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
+                          {comment.rating}/5 sao
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        {comment.comment}
+                      </p>
+                      <p className="mt-2 text-xs text-slate-400">
+                        {formatDateTime(comment.createdAt)}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

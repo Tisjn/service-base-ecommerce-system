@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
 import LoginPage from "./pages/auth/LoginPage.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
+import {
+  OrderNotificationProvider,
+  useOrderNotifications,
+} from "./context/OrderNotificationContext";
+import OrderToast from "./pages/customer/orders/components/OrderToast";
 import { refreshAccessToken } from "./api/authApi.js";
 import * as orderApi from "./api/orderApi.js";
 
@@ -93,11 +98,62 @@ function App() {
   return showLogin ? (
     <LoginPage onLogin={handleLogin} onCancel={handleCloseLogin} />
   ) : (
-    <Dashboard
-      onLogout={handleLogout}
-      onUserUpdate={handleUserUpdate}
-      onRequestLogin={handleRequestLogin}
-      user={user}
+    <OrderNotificationProvider user={user}>
+      <Dashboard
+        onLogout={handleLogout}
+        onUserUpdate={handleUserUpdate}
+        onRequestLogin={handleRequestLogin}
+        user={user}
+      />
+      <AdminNotificationToast />
+      <DeepLinkHandler />
+    </OrderNotificationProvider>
+  );
+}
+
+function DeepLinkHandler() {
+  const { openOrder } = useOrderNotifications() || {};
+
+  useEffect(() => {
+    function checkPath() {
+      try {
+        const match = window.location.pathname.match(/^\/orders\/(.+)$/);
+        if (match && match[1] && typeof openOrder === "function") {
+          openOrder(decodeURIComponent(match[1]));
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    checkPath();
+    window.addEventListener("popstate", checkPath);
+    return () => window.removeEventListener("popstate", checkPath);
+  }, [openOrder]);
+
+  return null;
+}
+
+function AdminNotificationToast() {
+  const { lastNotification } = useOrderNotifications() || {};
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (!lastNotification) return;
+    setVisible(true);
+    const t = setTimeout(() => setVisible(false), 3500);
+    return () => clearTimeout(t);
+  }, [lastNotification]);
+
+  if (!visible || !lastNotification) return null;
+
+  return (
+    <OrderToast
+      notification={{
+        type: "success",
+        text: `Đơn hàng mới #${lastNotification.orderId} — ${new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(lastNotification.total)}`,
+      }}
+      onClose={() => setVisible(false)}
     />
   );
 }

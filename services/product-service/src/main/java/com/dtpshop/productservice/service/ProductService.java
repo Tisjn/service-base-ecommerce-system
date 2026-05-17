@@ -15,6 +15,7 @@ import com.dtpshop.productservice.repository.ProductRepository;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.cache.annotation.CacheEvict;
@@ -76,6 +77,7 @@ public class ProductService {
         product.setStockQuantity(request.getStockQuantity());
         product.setReservedQuantity(0);
         product.setImageUrl(request.getImageUrl());
+        product.setDescriptionImageUrls(cleanImageUrls(request.getDescriptionImageUrls()));
         product.setStatus(request.getStatus() == null ? ProductStatus.ACTIVE
                 : ProductStatus.valueOf(request.getStatus().toUpperCase()));
         if (request.getCategoryId() != null) {
@@ -109,6 +111,9 @@ public class ProductService {
         }
         if (request.getImageUrl() != null) {
             product.setImageUrl(request.getImageUrl());
+        }
+        if (request.getDescriptionImageUrls() != null) {
+            product.setDescriptionImageUrls(cleanImageUrls(request.getDescriptionImageUrls()));
         }
         if (request.getStatus() != null) {
             product.setStatus(ProductStatus.valueOf(request.getStatus().toUpperCase()));
@@ -252,5 +257,16 @@ public class ProductService {
 
     public void clearCart(Long userId) {
         cartService.clearCart(userId);
+    }
+
+    private List<String> cleanImageUrls(List<String> imageUrls) {
+        if (imageUrls == null) {
+            return new ArrayList<>();
+        }
+        return imageUrls.stream()
+                .filter(url -> url != null && !url.isBlank())
+                .map(String::strip)
+                .distinct()
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 }

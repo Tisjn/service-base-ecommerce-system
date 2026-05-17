@@ -18,6 +18,7 @@ export default function OrderCatalogSection({
   onToggleSort,
   updatingProductId,
   onAddToCart,
+  onViewProduct,
 }) {
   const [showFilters, setShowFilters] = useState(false);
   const sortLabel =
@@ -258,6 +259,14 @@ export default function OrderCatalogSection({
                         </p>
                       </div>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => onViewProduct(product)}
+                      className="flex w-full items-center justify-center rounded-3xl border border-slate-200 bg-white px-6 py-3 text-sm font-bold uppercase tracking-[0.08em] text-slate-700 transition hover:bg-slate-100"
+                    >
+                      Xem chi tiết
+                    </button>
 
                     <button
                       type="button"

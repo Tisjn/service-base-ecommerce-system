@@ -10,7 +10,18 @@ const API_GATEWAY_URL =
 const PRODUCT_SERVICE_URL =
   import.meta.env.VITE_PRODUCT_SERVICE_URL || "http://localhost:3003";
 const API_BASE_URL = `${API_GATEWAY_URL.replace(/\/$/, "")}/api`;
-const DIRECT_API_BASE_URL = `${PRODUCT_SERVICE_URL.replace(/\/$/, "")}/api`;
+const PRODUCT_SERVICE_FALLBACK_URLS = (
+  import.meta.env.VITE_PRODUCT_SERVICE_FALLBACK_URLS || "http://localhost:8082"
+)
+  .split(",")
+  .map((url) => url.trim())
+  .filter(Boolean);
+const DIRECT_API_BASE_URLS = [
+  PRODUCT_SERVICE_URL,
+  ...PRODUCT_SERVICE_FALLBACK_URLS,
+]
+  .map((url) => `${url.replace(/\/$/, "")}/api`)
+  .filter((url, index, urls) => urls.indexOf(url) === index);
 
 function getAuthHeaders() {
   const token = localStorage.getItem("authToken");
@@ -28,16 +39,29 @@ function shouldFallbackToDirectApi(error) {
 
 function shouldFallbackResponse(response) {
   return (
-    API_BASE_URL !== DIRECT_API_BASE_URL &&
+    !DIRECT_API_BASE_URLS.includes(API_BASE_URL) &&
     [404, 502, 503, 504].includes(response.status)
   );
 }
 
 async function requestWithFallback(path, options = {}) {
+  const fetchDirectApi = async () => {
+    for (const baseUrl of DIRECT_API_BASE_URLS) {
+      try {
+        return await fetch(`${baseUrl}${path}`, options);
+      } catch {
+        // Try next configured product-service URL.
+      }
+    }
+    throw new Error(
+      `Không kết nối được product-service. Kiểm tra service đang chạy tại ${DIRECT_API_BASE_URLS.join(", ")}.`,
+    );
+  };
+
   try {
     const response = await fetch(`${API_BASE_URL}${path}`, options);
     if (shouldFallbackResponse(response)) {
-      return fetch(`${DIRECT_API_BASE_URL}${path}`, options);
+      return fetchDirectApi();
     }
     return response;
   } catch (error) {
@@ -45,7 +69,7 @@ async function requestWithFallback(path, options = {}) {
       throw error;
     }
 
-    return fetch(`${DIRECT_API_BASE_URL}${path}`, options);
+    return fetchDirectApi();
   }
 }
 

@@ -16,7 +16,7 @@ FROM eclipse-temurin:21-jre
 WORKDIR /app
 
 # Copy the built JAR from builder stage
-COPY --from=builder /build/target/product-service-*.jar app.jar
+COPY --from=builder /build/target/product-service-0.0.1-SNAPSHOT.jar app.jar
 
 # Expose port
 EXPOSE 3003

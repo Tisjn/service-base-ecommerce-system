@@ -1,6 +1,7 @@
 package com.dtpshop.orderservice.client;
 
 import com.dtpshop.orderservice.dto.CartItemDto;
+import com.dtpshop.orderservice.dto.ProductSnapshotDto;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +65,21 @@ public class ProductServiceClient {
         } catch (Exception ex) {
             logger.warn("Failed to fetch cart from product-service: {}", ex.getMessage());
             return List.of();
+        }
+    }
+
+    public ProductSnapshotDto getProduct(Long productId) {
+        String url = buildApiUrl("/products/" + productId);
+        try {
+            ResponseEntity<ProductSnapshotDto> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    HttpEntity.EMPTY,
+                    ProductSnapshotDto.class);
+            return response.getBody();
+        } catch (Exception ex) {
+            logger.warn("Failed to fetch product {} from product-service: {}", productId, ex.getMessage());
+            return null;
         }
     }
 
