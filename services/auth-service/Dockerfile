@@ -38,7 +38,10 @@ COPY . .
 # Tạo group tên app
 RUN addgroup -S app && \
     # Tạo user tên app thuộc group app
-    adduser -S app -G app
+    adduser -S app -G app && \
+    # Tạo thư mục uploads trước khi chuyển user, và chuyển quyền sở hữu
+    mkdir -p /app/uploads/avatars && \
+    chown -R app:app /app
 
 
 # Chuyển sang user app

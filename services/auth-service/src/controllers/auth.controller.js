@@ -194,6 +194,16 @@ const resetPassword = asyncHandler(async (req, res) => {
   res.status(200).json(result);
 });
 
+const changePassword = asyncHandler(async (req, res) => {
+  const payload = getBearerPayload(req);
+  const result = await passwordService.changePassword({
+    userId: payload.userId,
+    currentPassword: req.body.currentPassword,
+    newPassword: req.body.newPassword,
+  });
+  res.status(200).json(result);
+});
+
 const refresh = asyncHandler(async (req, res) => {
   const result = await authService.refresh(req.body.refreshToken);
   res.status(200).json(result);
@@ -229,6 +239,7 @@ module.exports = {
   deleteProfileAvatar,
   forgotPassword,
   resetPassword,
+  changePassword,
   refresh,
   logout,
   verify,

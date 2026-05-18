@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminDevelopmentPage from "../AdminDevelopmentPage";
 import { ADMIN_SECTIONS } from "../adminSections";
+import AdminDashboardPage from "../dashboard/AdminDashboardPage";
 import AdminSupportPage from "../support/AdminSupportPage";
 import AdminTopbar from "../../../components/admin/AdminTopbar";
 import ProductImageUpload from "../../../components/ProductImageUpload";
@@ -75,7 +76,7 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
   const [isSaving, setIsSaving] = useState(false);
   const [isCategorySaving, setIsCategorySaving] = useState(false);
   const [notification, setNotification] = useState(null);
-  const [activeAdminSection, setActiveAdminSection] = useState("products");
+  const [activeAdminSection, setActiveAdminSection] = useState("dashboard");
   const [adminOrders, setAdminOrders] = useState([]);
   const [adminOrdersLoading, setAdminOrdersLoading] = useState(false);
   const [adminOrdersError, setAdminOrdersError] = useState("");
@@ -524,7 +525,9 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
           applyFilters={applyFilters}
         />
 
-        {activeAdminSection === "products" ? (
+        {activeAdminSection === "dashboard" ? (
+          <AdminDashboardPage onSectionChange={setActiveAdminSection} />
+        ) : activeAdminSection === "products" ? (
           <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-10">
             <div className="mb-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div>
