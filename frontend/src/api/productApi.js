@@ -1,71 +1,16 @@
 const API_GATEWAY_URL =
   import.meta.env.VITE_API_GATEWAY_URL ||
   import.meta.env.VITE_API_URL ||
-  "http://localhost:3003";
-const PRODUCT_SERVICE_URL =
-  import.meta.env.VITE_PRODUCT_SERVICE_URL || "http://localhost:3003";
+  "http://localhost:8081";
 const API_BASE_URL = `${API_GATEWAY_URL.replace(/\/$/, "")}/api`;
-const PRODUCT_SERVICE_FALLBACK_URLS = (
-  import.meta.env.VITE_PRODUCT_SERVICE_FALLBACK_URLS || "http://localhost:8082"
-)
-  .split(",")
-  .map((url) => url.trim())
-  .filter(Boolean);
-const DIRECT_API_BASE_URLS = [
-  PRODUCT_SERVICE_URL,
-  ...PRODUCT_SERVICE_FALLBACK_URLS,
-]
-  .map((url) => `${url.replace(/\/$/, "")}/api`)
-  .filter((url, index, urls) => urls.indexOf(url) === index);
 
 function getAuthHeaders() {
   const token = localStorage.getItem("authToken");
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-function shouldFallbackToDirectApi(error) {
-  return Boolean(
-    API_GATEWAY_URL &&
-    (error?.name === "TypeError" ||
-      error?.message === "Failed to fetch" ||
-      error?.code === "ECONNREFUSED"),
-  );
-}
-
-function shouldFallbackResponse(response) {
-  return (
-    !DIRECT_API_BASE_URLS.includes(API_BASE_URL) &&
-    [404, 502, 503, 504].includes(response.status)
-  );
-}
-
 async function requestWithFallback(path, options = {}) {
-  const fetchDirectApi = async () => {
-    for (const baseUrl of DIRECT_API_BASE_URLS) {
-      try {
-        return await fetch(`${baseUrl}${path}`, options);
-      } catch {
-        // Try next configured product-service URL.
-      }
-    }
-    throw new Error(
-      `Không kết nối được product-service. Kiểm tra service đang chạy tại ${DIRECT_API_BASE_URLS.join(", ")}.`,
-    );
-  };
-
-  try {
-    const response = await fetch(`${API_BASE_URL}${path}`, options);
-    if (shouldFallbackResponse(response)) {
-      return fetchDirectApi();
-    }
-    return response;
-  } catch (error) {
-    if (!shouldFallbackToDirectApi(error)) {
-      throw error;
-    }
-
-    return fetchDirectApi();
-  }
+  return fetch(`${API_BASE_URL}${path}`, options);
 }
 
 async function handleResponse(response) {

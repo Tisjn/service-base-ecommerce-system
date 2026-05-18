@@ -36,10 +36,10 @@ export default function OrderInsightPanel({
           Trạng thái đơn
         </p>
         <ol className="mt-4 space-y-3 text-sm leading-6 text-slate-200">
-          <li>1. Chờ xử lý: đơn vừa được tạo từ giỏ hàng.</li>
+          <li>1. Chờ xác nhận: đơn vừa được tạo từ giỏ hàng.</li>
           <li>2. Đã xác nhận: admin duyệt đơn COD.</li>
           <li>3. Đang xử lý, đang giao, đã giao: tiến độ vận hành.</li>
-          <li>4. Khách chỉ hủy được khi đơn còn chờ xử lý.</li>
+          <li>4. Khách chỉ hủy được khi đơn còn chờ xác nhận.</li>
         </ol>
       </div>
     </aside>

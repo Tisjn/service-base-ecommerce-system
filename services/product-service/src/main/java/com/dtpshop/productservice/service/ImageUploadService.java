@@ -19,7 +19,7 @@ public class ImageUploadService {
 
     public ImageUploadService(S3Client s3Client,
             @Value("${S3_BUCKET_NAME:s3-dynamodb-phuc}") String bucketName,
-            @Value("${AWS_REGION:ap-southeast-1}") String awsRegion) {
+            @Value("${AWS_REGION:us-east-1}") String awsRegion) {
         this.s3Client = s3Client;
         this.bucketName = bucketName;
         this.s3UrlPattern = String.format("https://%s.s3.%s.amazonaws.com/%s", bucketName, awsRegion, "%s");

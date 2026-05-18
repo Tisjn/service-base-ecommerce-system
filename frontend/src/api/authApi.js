@@ -1,20 +1,12 @@
 import axios from "axios";
 
-const gatewayUrl = import.meta.env.VITE_API_GATEWAY_URL;
-const authServiceUrl =
-  import.meta.env.VITE_AUTH_SERVICE_URL || "http://localhost:3001";
-const apiBase = `${authServiceUrl.replace(/\/+$/, "")}`;
-const gatewayBase = gatewayUrl ? `${gatewayUrl.replace(/\/+$/, "")}/api` : "";
+const gatewayUrl =
+  import.meta.env.VITE_API_GATEWAY_URL ||
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:8081";
+const gatewayBase = `${gatewayUrl.replace(/\/+$/, "")}/api`;
 
 const authApi = axios.create({
-  baseURL: apiBase,
-  headers: {
-    "Content-Type": "application/json",
-  },
-  timeout: 15000,
-});
-
-const gatewayAuthApi = axios.create({
   baseURL: gatewayBase,
   headers: {
     "Content-Type": "application/json",
@@ -22,67 +14,24 @@ const gatewayAuthApi = axios.create({
   timeout: 15000,
 });
 
-function shouldFallbackToGatewayAuth(error) {
-  return Boolean(
-    gatewayUrl &&
-    (error?.code === "ERR_NETWORK" || error?.code === "ECONNABORTED"),
-  );
-}
-
 async function postWithFallback(path, data, config = {}) {
-  try {
-    const response = await authApi.post(path, data, config);
-    return response.data;
-  } catch (error) {
-    if (!shouldFallbackToGatewayAuth(error)) {
-      throw error;
-    }
-
-    const response = await gatewayAuthApi.post(path, data, config);
-    return response.data;
-  }
+  const response = await authApi.post(path, data, config);
+  return response.data;
 }
 
 async function getWithFallback(path, config = {}) {
-  try {
-    const response = await authApi.get(path, config);
-    return response.data;
-  } catch (error) {
-    if (!shouldFallbackToGatewayAuth(error)) {
-      throw error;
-    }
-
-    const response = await gatewayAuthApi.get(path, config);
-    return response.data;
-  }
+  const response = await authApi.get(path, config);
+  return response.data;
 }
 
 async function putWithFallback(path, data, config = {}) {
-  try {
-    const response = await authApi.put(path, data, config);
-    return response.data;
-  } catch (error) {
-    if (!shouldFallbackToGatewayAuth(error)) {
-      throw error;
-    }
-
-    const response = await gatewayAuthApi.put(path, data, config);
-    return response.data;
-  }
+  const response = await authApi.put(path, data, config);
+  return response.data;
 }
 
 async function deleteWithFallback(path, config = {}) {
-  try {
-    const response = await authApi.delete(path, config);
-    return response.data;
-  } catch (error) {
-    if (!shouldFallbackToGatewayAuth(error)) {
-      throw error;
-    }
-
-    const response = await gatewayAuthApi.delete(path, config);
-    return response.data;
-  }
+  const response = await authApi.delete(path, config);
+  return response.data;
 }
 
 export async function loginUser(email, password) {

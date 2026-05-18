@@ -41,7 +41,7 @@ export function getOrderBadgeClass(status) {
 export function getStatusLabel(status) {
   switch (status) {
     case "PENDING":
-      return "Chờ xử lý";
+      return "Chờ xác nhận";
     case "CONFIRMED":
       return "Đã xác nhận";
     case "PROCESSING":

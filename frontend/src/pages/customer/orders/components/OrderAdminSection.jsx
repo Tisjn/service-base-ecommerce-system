@@ -70,8 +70,14 @@ export default function OrderAdminSection({
                   </div>
 
                   <dl className="mt-4 grid gap-3 text-sm text-slate-600 md:grid-cols-3">
-                    <Info label="Khách hàng" value={`User #${order.userId || "-"}`} />
-                    <Info label="Ngày tạo" value={formatDateTime(order.createdAt)} />
+                    <Info
+                      label="Khách hàng"
+                      value={`User #${order.userId || "-"}`}
+                    />
+                    <Info
+                      label="Ngày tạo"
+                      value={formatDateTime(order.createdAt)}
+                    />
                     <Info
                       label="Tổng tiền"
                       value={currencyFormatter.format(order.totalAmount || 0)}
@@ -131,7 +137,7 @@ export default function OrderAdminSection({
                       onClick={() => onCancelOrder(order.orderId)}
                       className="mt-3 w-full rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      Hủy đơn chờ xử lý
+                      Hủy đơn chờ xác nhận
                     </button>
                   )}
                 </div>

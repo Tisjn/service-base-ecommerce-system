@@ -48,6 +48,8 @@ services:
       - REDIS_PORT=6379
       - ORDER_SERVICE_URL=http://host.docker.internal:3004
       - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - S3_BUCKET_NAME=s3-dynamodb-phuc
       - SERVER_PORT=3003
       - JWT_SECRET=${JWT_SECRET:-0a8e7a473e35d1080204701f57ba0cb86641689c11998b16662f96be329c2ac3}

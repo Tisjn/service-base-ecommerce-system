@@ -5,7 +5,9 @@ import SockJS from "sockjs-client";
 export default function useOrderSocket(onNewOrder) {
   useEffect(() => {
     const gateway =
-      import.meta.env.VITE_API_GATEWAY_URL || "http://localhost:8080";
+      import.meta.env.VITE_API_GATEWAY_URL ||
+      import.meta.env.VITE_API_URL ||
+      "http://localhost:8081";
     const sock = new SockJS(`${gateway.replace(/\/$/, "")}/ws`);
 
     let connected = false;

@@ -179,7 +179,7 @@ export default function OrderHistorySection({
           </p>
         </div>
         <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-          <Stat label="Chờ xử lý" value={orderStats.pending} />
+          <Stat label="Chờ xác nhận" value={orderStats.pending} />
           <Stat label="Đã xác nhận" value={orderStats.confirmed} />
           <Stat label="Đang giao" value={orderStats.shipped} />
           <Stat label="Đã hủy" value={orderStats.cancelled} />
@@ -364,7 +364,7 @@ export default function OrderHistorySection({
                         >
                           {updatingOrderId === order.orderId
                             ? "Đang xử lý..."
-                            : "Hủy đơn chờ xử lý"}
+                            : "Hủy đơn chờ xác nhận"}
                         </button>
                       </div>
                     )}

@@ -1,7 +1,9 @@
 import axios from "axios";
 
 const CHAT_SERVICE_URL =
-  import.meta.env.VITE_CHAT_SERVICE_URL || "http://localhost:3008";
+  import.meta.env.VITE_API_GATEWAY_URL ||
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:8081";
 const CHAT_API_BASE_URL = `${CHAT_SERVICE_URL.replace(/\/+$/, "")}/chat`;
 const SOCKET_IO_CLIENT_SRC = "/socket.io.min.js";
 

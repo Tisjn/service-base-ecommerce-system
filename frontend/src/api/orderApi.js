@@ -1,25 +1,8 @@
 const API_GATEWAY_URL =
   import.meta.env.VITE_API_GATEWAY_URL ||
   import.meta.env.VITE_API_URL ||
-  "http://localhost:3003";
-const ORDER_SERVICE_URL =
-  import.meta.env.VITE_ORDER_SERVICE_URL || "http://localhost:3004";
-const PRODUCT_SERVICE_URL =
-  import.meta.env.VITE_PRODUCT_SERVICE_URL || "http://localhost:3003";
+  "http://localhost:8081";
 const API_BASE_URL = `${API_GATEWAY_URL.replace(/\/$/, "")}/api`;
-const ORDER_API_BASE_URL = `${ORDER_SERVICE_URL.replace(/\/$/, "")}/api`;
-const PRODUCT_SERVICE_FALLBACK_URLS = (
-  import.meta.env.VITE_PRODUCT_SERVICE_FALLBACK_URLS || "http://localhost:8082"
-)
-  .split(",")
-  .map((url) => url.trim())
-  .filter(Boolean);
-const PRODUCT_API_BASE_URLS = [
-  PRODUCT_SERVICE_URL,
-  ...PRODUCT_SERVICE_FALLBACK_URLS,
-]
-  .map((url) => `${url.replace(/\/$/, "")}/api`)
-  .filter((url, index, urls) => urls.indexOf(url) === index);
 
 function getAuthHeaders(guestToken) {
   const headers = {};
@@ -37,46 +20,8 @@ function generateGuestToken() {
   return `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-function shouldFallbackToDirectApi(error) {
-  return Boolean(
-    API_GATEWAY_URL &&
-    (error?.name === "TypeError" ||
-      error?.message === "Failed to fetch" ||
-      error?.code === "ECONNREFUSED"),
-  );
-}
-
-async function requestWithFallback(path, options = {}, service = "order") {
-  const directBaseUrls =
-    service === "product" ? PRODUCT_API_BASE_URLS : [ORDER_API_BASE_URL];
-
-  try {
-    for (const baseUrl of directBaseUrls) {
-      try {
-        return await fetch(`${baseUrl}${path}`, options);
-      } catch {
-        // Try next direct service URL before gateway fallback.
-      }
-    }
-    throw new Error("Direct service unavailable");
-  } catch (error) {
-    if (!API_GATEWAY_URL) {
-      throw error;
-    }
-    try {
-      return await fetch(`${API_BASE_URL}${path}`, options);
-    } catch {
-      const serviceName =
-        service === "product" ? "product-service" : "order-service";
-      const serviceUrl =
-        service === "product"
-          ? PRODUCT_API_BASE_URLS.join(", ")
-          : ORDER_SERVICE_URL;
-      throw new Error(
-        `Không kết nối được ${serviceName}. Kiểm tra service đang chạy tại ${serviceUrl}.`,
-      );
-    }
-  }
+async function requestWithFallback(path, options = {}) {
+  return fetch(`${API_BASE_URL}${path}`, options);
 }
 
 async function handleResponse(response) {
