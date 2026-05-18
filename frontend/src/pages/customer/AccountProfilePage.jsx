@@ -5,18 +5,23 @@ import {
   updateProfileAvatar,
 } from "../../api/authApi";
 import {
-  getUserAddress,
+  createUserAddress,
+  deleteUserAddress,
+  getUserAddresses,
   getUserProfile,
   updateUserAddress,
   updateUserProfile,
 } from "../../api/userApi";
 
 const emptyAddress = {
+  id: null,
+  recipientName: "",
+  phone: "",
+  label: "",
   street: "",
+  district: "",
   city: "",
-  state: "",
-  postalCode: "",
-  country: "",
+  defaultAddress: false,
 };
 
 function getInitial(nameOrEmail) {
@@ -32,6 +37,19 @@ function getErrorMessage(error, fallback) {
   );
 }
 
+function toAddressForm(address) {
+  return {
+    id: address?.id || null,
+    recipientName: address?.recipientName || "",
+    phone: address?.phone || "",
+    label: address?.label || "",
+    street: address?.street || "",
+    district: address?.district || "",
+    city: address?.city || "",
+    defaultAddress: Boolean(address?.defaultAddress),
+  };
+}
+
 export default function AccountProfilePage({ user, onUserUpdate }) {
   const accessToken = localStorage.getItem("authToken") || "";
   const [activeTab, setActiveTab] = useState("profile");
@@ -41,6 +59,7 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
     phone: user?.phone || "",
   });
   const [addressForm, setAddressForm] = useState(emptyAddress);
+  const [addresses, setAddresses] = useState([]);
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
     newPassword: "",
@@ -73,7 +92,7 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
     if (!accessToken) return undefined;
 
     setLoading(true);
-    Promise.allSettled([getUserProfile(accessToken), getUserAddress(accessToken)])
+    Promise.allSettled([getUserProfile(accessToken), getUserAddresses(accessToken)])
       .then(([profileResult, addressResult]) => {
         if (cancelled) return;
 
@@ -89,14 +108,12 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
           });
         }
 
-        if (addressResult.status === "fulfilled" && addressResult.value) {
-          setAddressForm({
-            street: addressResult.value.street || "",
-            city: addressResult.value.city || "",
-            state: addressResult.value.state || "",
-            postalCode: addressResult.value.postalCode || "",
-            country: addressResult.value.country || "",
-          });
+        if (addressResult.status === "fulfilled") {
+          const nextAddresses = Array.isArray(addressResult.value)
+            ? addressResult.value
+            : [];
+          setAddresses(nextAddresses);
+          setAddressForm(toAddressForm(nextAddresses[0] || null));
         }
       })
       .finally(() => {
@@ -162,23 +179,32 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
 
   async function handleSaveAddress(event) {
     event.preventDefault();
+    const recipientName = addressForm.recipientName.trim();
+    const phone = addressForm.phone.trim();
+    if (!recipientName || !phone) {
+      setNotice({
+        type: "error",
+        message: "Vui lòng nhập tên người nhận và số điện thoại.",
+      });
+      return;
+    }
+
     setSavingAddress(true);
     setNotice(null);
     try {
-      const data = await updateUserAddress(accessToken, {
+      const payload = {
+        recipientName,
+        phone,
+        label: addressForm.label.trim(),
         street: addressForm.street.trim(),
+        district: addressForm.district.trim(),
         city: addressForm.city.trim(),
-        state: addressForm.state.trim(),
-        postalCode: addressForm.postalCode.trim(),
-        country: addressForm.country.trim(),
-      });
-      setAddressForm({
-        street: data?.street || "",
-        city: data?.city || "",
-        state: data?.state || "",
-        postalCode: data?.postalCode || "",
-        country: data?.country || "",
-      });
+        defaultAddress: addressForm.defaultAddress,
+      };
+      const data = addressForm.id
+        ? await updateUserAddress(accessToken, addressForm.id, payload)
+        : await createUserAddress(accessToken, payload);
+      await refreshAddresses(data?.id);
       setNotice({ type: "success", message: "Đã lưu địa chỉ vào user-service." });
     } catch (error) {
       setNotice({
@@ -188,6 +214,43 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
     } finally {
       setSavingAddress(false);
     }
+  }
+
+  async function refreshAddresses(selectedId) {
+    const data = await getUserAddresses(accessToken);
+    const nextAddresses = Array.isArray(data) ? data : [];
+    setAddresses(nextAddresses);
+    const selected =
+      nextAddresses.find((address) => address.id === selectedId) ||
+      nextAddresses[0] ||
+      null;
+    setAddressForm(toAddressForm(selected));
+  }
+
+  async function handleDeleteAddress(addressId) {
+    if (!addressId) return;
+    setSavingAddress(true);
+    setNotice(null);
+    try {
+      await deleteUserAddress(accessToken, addressId);
+      await refreshAddresses();
+      setNotice({ type: "success", message: "Đã xóa địa chỉ." });
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message: getErrorMessage(error, "Không xóa được địa chỉ."),
+      });
+    } finally {
+      setSavingAddress(false);
+    }
+  }
+
+  function startNewAddress() {
+    setAddressForm(emptyAddress);
+  }
+
+  function editAddress(address) {
+    setAddressForm(toAddressForm(address));
   }
 
   async function handleChangePassword(event) {
@@ -515,56 +578,166 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
         )}
 
         {activeTab === "addresses" && (
-          <form
-            onSubmit={handleSaveAddress}
-            className="rounded-lg bg-white p-8 shadow-sm"
-          >
-            <div className="grid gap-5 md:grid-cols-2">
-              <ProfileField label="Street" className="md:col-span-2">
+          <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+            <section className="rounded-lg bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="text-lg font-extrabold text-slate-950">
+                  Saved Addresses
+                </h3>
+                <button
+                  type="button"
+                  onClick={startNewAddress}
+                  className="rounded-md bg-[#edf0f7] px-3 py-2 text-sm font-extrabold text-[#075bd8]"
+                >
+                  Add New
+                </button>
+              </div>
+              <div className="space-y-3">
+                {addresses.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-sm font-semibold text-slate-500">
+                    Chưa có địa chỉ nào.
+                  </div>
+                ) : (
+                  addresses.map((address) => (
+                    <button
+                      key={address.id}
+                      type="button"
+                      onClick={() => editAddress(address)}
+                      className={`w-full rounded-lg border p-4 text-left transition ${
+                        addressForm.id === address.id
+                          ? "border-[#075bd8] bg-blue-50"
+                          : "border-slate-200 bg-slate-50 hover:bg-white"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-extrabold text-slate-950">
+                              {address.recipientName || "Người nhận"}
+                            </p>
+                            {address.defaultAddress ? (
+                              <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-700">
+                                Default
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 text-sm text-slate-600">
+                            {address.phone || "-"}
+                          </p>
+                          <p className="mt-2 text-sm text-slate-700">
+                            {[address.street, address.district, address.city]
+                              .filter(Boolean)
+                              .join(", ") || "Chưa nhập địa chỉ"}
+                          </p>
+                        </div>
+                        <span className="rounded-md bg-white px-2 py-1 text-xs font-bold text-slate-500">
+                          {address.label || "Address"}
+                        </span>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </section>
+
+            <form
+              onSubmit={handleSaveAddress}
+              className="rounded-lg bg-white p-8 shadow-sm"
+            >
+              <div className="grid gap-5 md:grid-cols-2">
+                <ProfileField label="Recipient Name">
+                  <input
+                    value={addressForm.recipientName}
+                    onChange={(event) =>
+                      setAddressValue("recipientName", event.target.value)
+                    }
+                    className="profile-input"
+                  />
+                </ProfileField>
+                <ProfileField label="Phone">
+                  <input
+                    value={addressForm.phone}
+                    onChange={(event) => setAddressValue("phone", event.target.value)}
+                    className="profile-input"
+                  />
+                </ProfileField>
+                <ProfileField label="Label">
+                  <input
+                    value={addressForm.label}
+                    onChange={(event) => setAddressValue("label", event.target.value)}
+                    className="profile-input"
+                    placeholder="Home, Office..."
+                  />
+                </ProfileField>
+                <ProfileField label="City">
+                  <input
+                    value={addressForm.city}
+                    onChange={(event) => setAddressValue("city", event.target.value)}
+                    className="profile-input"
+                  />
+                </ProfileField>
+                <ProfileField label="Street" className="md:col-span-2">
+                  <input
+                    value={addressForm.street}
+                    onChange={(event) => setAddressValue("street", event.target.value)}
+                    className="profile-input"
+                  />
+                </ProfileField>
+                <ProfileField label="District" className="md:col-span-2">
+                  <input
+                    value={addressForm.district}
+                    onChange={(event) =>
+                      setAddressValue("district", event.target.value)
+                    }
+                    className="profile-input"
+                  />
+                </ProfileField>
+              </div>
+
+              <label className="mt-5 flex items-center gap-3 text-sm font-bold text-slate-700">
                 <input
-                  value={addressForm.street}
-                  onChange={(event) => setAddressValue("street", event.target.value)}
-                  className="profile-input"
-                />
-              </ProfileField>
-              <ProfileField label="City">
-                <input
-                  value={addressForm.city}
-                  onChange={(event) => setAddressValue("city", event.target.value)}
-                  className="profile-input"
-                />
-              </ProfileField>
-              <ProfileField label="State">
-                <input
-                  value={addressForm.state}
-                  onChange={(event) => setAddressValue("state", event.target.value)}
-                  className="profile-input"
-                />
-              </ProfileField>
-              <ProfileField label="Postal Code">
-                <input
-                  value={addressForm.postalCode}
+                  type="checkbox"
+                  checked={addressForm.defaultAddress}
                   onChange={(event) =>
-                    setAddressValue("postalCode", event.target.value)
+                    setAddressValue("defaultAddress", event.target.checked)
                   }
-                  className="profile-input"
+                  className="h-4 w-4"
                 />
-              </ProfileField>
-              <ProfileField label="Country">
-                <input
-                  value={addressForm.country}
-                  onChange={(event) => setAddressValue("country", event.target.value)}
-                  className="profile-input"
-                />
-              </ProfileField>
-            </div>
-            <FormActions
-              saving={savingAddress}
-              saveLabel="Save Address"
-              savingLabel="Saving..."
-              onDiscard={() => setNotice(null)}
-            />
-          </form>
+                Set as default address
+              </label>
+
+              <div className="mt-8 flex flex-wrap items-center justify-end gap-3">
+                {addressForm.id ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteAddress(addressForm.id)}
+                    disabled={savingAddress}
+                    className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-extrabold text-rose-700 disabled:opacity-60"
+                  >
+                    Delete
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={startNewAddress}
+                  className="rounded-md px-4 py-3 text-sm font-extrabold text-[#075bd8] transition hover:bg-[#edf0f7]"
+                >
+                  Clear Form
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingAddress}
+                  className="rounded-md bg-[#a84600] px-7 py-3 text-sm font-extrabold text-white transition hover:bg-[#8f3900] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {savingAddress
+                    ? "Saving..."
+                    : addressForm.id
+                      ? "Update Address"
+                      : "Create Address"}
+                </button>
+              </div>
+            </form>
+          </div>
         )}
       </div>
     </section>

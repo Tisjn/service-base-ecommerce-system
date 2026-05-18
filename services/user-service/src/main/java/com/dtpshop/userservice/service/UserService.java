@@ -53,30 +53,43 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public AddressResponse getMyAddress(GatewayUser gatewayUser) {
-        return addressRepository.findFirstByUserIdOrderByIdAsc(gatewayUser.id())
+    public List<AddressResponse> getMyAddresses(GatewayUser gatewayUser) {
+        return addressRepository.findByUserIdOrderByDefaultAddressDescCreatedAtDescIdDesc(gatewayUser.id())
+                .stream()
                 .map(AddressResponse::from)
-                .orElse(null);
+                .toList();
     }
 
     @Transactional
-    public AddressResponse upsertMyAddress(GatewayUser gatewayUser, AddressRequest request) {
+    public AddressResponse createMyAddress(GatewayUser gatewayUser, AddressRequest request) {
         UserProfile user = userRepository.findById(gatewayUser.id())
                 .orElseGet(() -> createFromGateway(gatewayUser));
-        Address address = addressRepository.findFirstByUserIdOrderByIdAsc(gatewayUser.id())
-                .orElseGet(() -> {
-                    Address next = new Address();
-                    next.setUser(user);
-                    return next;
-                });
-
-        address.setStreet(blankToNull(request.street()));
-        address.setCity(blankToNull(request.city()));
-        address.setState(blankToNull(request.state()));
-        address.setPostalCode(blankToNull(request.postalCode()));
-        address.setCountry(blankToNull(request.country()));
-
+        Address address = new Address();
+        address.setUser(user);
+        applyAddress(address, request, shouldMakeDefault(gatewayUser.id(), request.defaultAddress()));
         return AddressResponse.from(addressRepository.save(address));
+    }
+
+    @Transactional
+    public AddressResponse updateMyAddress(GatewayUser gatewayUser, Long addressId, AddressRequest request) {
+        Address address = addressRepository.findByIdAndUserId(addressId, gatewayUser.id())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Dia chi khong ton tai"));
+        applyAddress(address, request, Boolean.TRUE.equals(request.defaultAddress()));
+        return AddressResponse.from(address);
+    }
+
+    @Transactional
+    public void deleteMyAddress(GatewayUser gatewayUser, Long addressId) {
+        Address address = addressRepository.findByIdAndUserId(addressId, gatewayUser.id())
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Dia chi khong ton tai"));
+        boolean wasDefault = address.isDefaultAddress();
+        addressRepository.delete(address);
+        addressRepository.flush();
+
+        if (wasDefault) {
+            addressRepository.findFirstByUserIdOrderByDefaultAddressDescCreatedAtAscIdAsc(gatewayUser.id())
+                    .ifPresent(next -> next.setDefaultAddress(true));
+        }
     }
 
     @Transactional(readOnly = true)
@@ -175,7 +188,29 @@ public class UserService {
         }
     }
 
+    private boolean shouldMakeDefault(Long userId, Boolean requestedDefault) {
+        return Boolean.TRUE.equals(requestedDefault) || addressRepository.countByUserId(userId) == 0;
+    }
+
+    private void applyAddress(Address address, AddressRequest request, boolean makeDefault) {
+        if (makeDefault) {
+            addressRepository.clearDefaultForUser(address.getUser().getId());
+            address.setDefaultAddress(true);
+        } else if (address.getId() == null) {
+            address.setDefaultAddress(false);
+        }
+        address.setRecipientName(blankToNull(request.recipientName()));
+        address.setPhone(blankToNull(request.phone()));
+        address.setLabel(blankToNull(request.label()));
+        address.setStreet(blankToNull(request.street()));
+        address.setDistrict(blankToNull(request.district()));
+        address.setCity(blankToNull(request.city()));
+    }
+
     private String blankToNull(String value) {
+        if (value == null) {
+            return null;
+        }
         String normalized = value.trim();
         return normalized.isBlank() ? null : normalized;
     }

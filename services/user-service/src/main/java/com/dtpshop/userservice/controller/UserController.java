@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -44,17 +45,35 @@ public class UserController {
         return ResponseEntity.ok(userService.updateMe(gatewayUser, request));
     }
 
-    @GetMapping("/me/address")
-    public ResponseEntity<AddressResponse> getMyAddress(@AuthenticationPrincipal GatewayUser gatewayUser) {
-        return ResponseEntity.ok(userService.getMyAddress(gatewayUser));
+    @GetMapping("/me/addresses")
+    public ResponseEntity<List<AddressResponse>> getMyAddresses(@AuthenticationPrincipal GatewayUser gatewayUser) {
+        return ResponseEntity.ok(userService.getMyAddresses(gatewayUser));
     }
 
-    @PatchMapping("/me/address")
-    public ResponseEntity<AddressResponse> updateMyAddress(
+    @PostMapping("/me/addresses")
+    public ResponseEntity<AddressResponse> createMyAddress(
             @AuthenticationPrincipal GatewayUser gatewayUser,
             @Valid @RequestBody AddressRequest request
     ) {
-        return ResponseEntity.ok(userService.upsertMyAddress(gatewayUser, request));
+        return ResponseEntity.status(201).body(userService.createMyAddress(gatewayUser, request));
+    }
+
+    @PatchMapping("/me/addresses/{addressId}")
+    public ResponseEntity<AddressResponse> updateMyAddress(
+            @AuthenticationPrincipal GatewayUser gatewayUser,
+            @PathVariable Long addressId,
+            @Valid @RequestBody AddressRequest request
+    ) {
+        return ResponseEntity.ok(userService.updateMyAddress(gatewayUser, addressId, request));
+    }
+
+    @DeleteMapping("/me/addresses/{addressId}")
+    public ResponseEntity<Void> deleteMyAddress(
+            @AuthenticationPrincipal GatewayUser gatewayUser,
+            @PathVariable Long addressId
+    ) {
+        userService.deleteMyAddress(gatewayUser, addressId);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping

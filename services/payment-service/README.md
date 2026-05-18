@@ -1,65 +1,111 @@
-# Payment Service (Spring Boot)
+# Payment Service
 
-## Tổng quan
+`payment-service` quan ly giao dich thanh toan cho don hang, hien ho tro 2 phuong thuc:
 
-**payment-service** xử lý giao dịch thanh toán, webhook callback và refund. Service này đóng vai trò adapter giữa hệ thống nội bộ và cổng thanh toán bên ngoài.
+- `MOMO`: tao link thanh toan qua MoMo sandbox theo mau `CollectionLink.js`.
+- `COD`: tao payment thu tien khi nhan hang, khong goi cong thanh toan.
 
-## Vai trò trong hệ thống
+## Database
 
-| Vai trò                  | Trách nhiệm                                     |
-| ------------------------ | ----------------------------------------------- |
-| order-service            | Tạo giao dịch thanh toán và kiểm tra trạng thái |
-| Customer                 | Xem lịch sử thanh toán                          |
-| Admin                    | Xem giao dịch, thống kê và hoàn tiền            |
-| Payment Gateway external | Gửi webhook callback                            |
+Service dung bang `payment`:
 
-## Công nghệ
+```sql
+CREATE TABLE payment (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  order_id BIGINT NOT NULL,
+  payment_method VARCHAR(40) NOT NULL,
+  provider VARCHAR(80) NOT NULL,
+  amount DECIMAL(15,2) NOT NULL,
+  status VARCHAR(40) NOT NULL,
+  transaction_code VARCHAR(120),
+  gateway_transaction_id VARCHAR(120),
+  payment_url VARCHAR(1000),
+  paid_at TIMESTAMP NULL,
+  expired_at TIMESTAMP NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
 
-- Spring Boot 3.x
-- Java 21
-- Spring Web, Spring Data JPA, Spring Validation, Spring Retry
-- MySQL
-
-## Biến môi trường
+## Environment
 
 ```env
 PORT=3005
-RDS_HOST=your-rds-endpoint.ap-southeast-1.rds.amazonaws.com
+RDS_HOST=your-rds-endpoint
 RDS_PORT=3306
+RDS_DB=ecommerce_data
 RDS_USER=admin
-RDS_PASSWORD=your_rds_password
-RDS_SSL=true
+RDS_PASSWORD=your_password
+RDS_SSL=false
 
-SPRING_DATASOURCE_URL=jdbc:mysql://${RDS_HOST}:${RDS_PORT}/paymentdb?useSSL=${RDS_SSL}&requireSSL=${RDS_SSL}
-SPRING_DATASOURCE_USERNAME=${RDS_USER}
-SPRING_DATASOURCE_PASSWORD=${RDS_PASSWORD}
-PAYMENT_GATEWAY_URL=https://mock-gateway.internal
-WEBHOOK_SECRET=webhook_hmac_secret
-ORDER_SERVICE_URL=http://order-service:3004
+MOMO_ENDPOINT=https://test-payment.momo.vn/v2/gateway/api/create
+MOMO_PARTNER_CODE=MOMO
+MOMO_ACCESS_KEY=your_momo_access_key
+MOMO_SECRET_KEY=your_momo_secret_key
+MOMO_REDIRECT_URL=http://localhost:5173/customer/orders
+MOMO_IPN_URL=http://localhost:3005/payments/webhook/momo
 ```
 
-## Chạy ứng dụng
+## API
+
+### Tao payment
+
+```http
+POST /payments
+Content-Type: application/json
+
+{
+  "orderId": 1001,
+  "paymentMethod": "MOMO",
+  "amount": 50000,
+  "orderInfo": "Thanh toan don hang #1001"
+}
+```
+
+Voi `MOMO`, response co `paymentUrl` de frontend redirect user sang cong thanh toan.
+
+Voi `COD`, gui:
+
+```json
+{
+  "orderId": 1001,
+  "paymentMethod": "COD",
+  "amount": 50000
+}
+```
+
+### Lay danh sach payment
+
+```http
+GET /payments
+GET /payments?orderId=1001
+GET /payments/{id}
+```
+
+### Xac nhan COD da thu tien
+
+```http
+PATCH /payments/{id}/cod-paid
+```
+
+### Webhook MoMo
+
+```http
+POST /payments/webhook/momo
+```
+
+Webhook se verify chu ky HMAC SHA256 va cap nhat payment sang `PAID` neu `resultCode = 0`, nguoc lai sang `FAILED`.
+
+## Run
 
 ```bash
+mvn test
 mvn spring-boot:run
 ```
 
-Hoặc chạy Docker:
+Hoac Docker:
 
 ```bash
 docker build -t payment-service .
-docker run --rm -p 3005:3005 payment-service
+docker compose up -d --build
 ```
-
-## API chính
-
-- `POST /payments`
-- `GET /payments`
-- `GET /payments/:id`
-- `POST /payments/webhook`
-- `POST /payments/:id/refund`
-
-## Ghi chú
-
-- Webhook nên được verify bằng HMAC signature.
-- Có thể dùng mock gateway để test luồng thanh toán trong môi trường học tập.

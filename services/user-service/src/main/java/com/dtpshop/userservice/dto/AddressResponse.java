@@ -2,14 +2,19 @@ package com.dtpshop.userservice.dto;
 
 import com.dtpshop.userservice.model.Address;
 
+import java.time.Instant;
+
 public record AddressResponse(
         Long id,
-        Long userId,
+        Long customerId,
+        String recipientName,
+        String phone,
+        String label,
         String street,
+        String district,
         String city,
-        String state,
-        String postalCode,
-        String country
+        boolean defaultAddress,
+        Instant createdAt
 ) {
     public static AddressResponse from(Address address) {
         if (address == null) {
@@ -19,11 +24,14 @@ public record AddressResponse(
         return new AddressResponse(
                 address.getId(),
                 address.getUser().getId(),
+                address.getRecipientName(),
+                address.getPhone(),
+                address.getLabel(),
                 address.getStreet(),
+                address.getDistrict(),
                 address.getCity(),
-                address.getState(),
-                address.getPostalCode(),
-                address.getCountry()
+                address.isDefaultAddress(),
+                address.getCreatedAt()
         );
     }
 }

@@ -1,10 +1,18 @@
 package com.dtpshop.orderservice.dto;
 
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
 public class OrderRequestDto {
-    @NotBlank
-    private String shippingAddress;
+    @NotNull
+    private Long addressId;
+
+    private String paymentMethod = "COD";
+
+    private String note;
+
+    public void setShippingAddress(String shippingAddress) {
+        this.note = shippingAddress;
+    }
 }

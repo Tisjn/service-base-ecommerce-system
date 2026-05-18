@@ -29,9 +29,15 @@ public class PaymentServiceClient {
     }
 
     public PaymentResult processPayment(Long orderId, BigDecimal amount, String correlationId) {
+        return createPayment(orderId, amount, "MOMO", correlationId);
+    }
+
+    public PaymentResult createPayment(Long orderId, BigDecimal amount, String paymentMethod, String correlationId) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("orderId", orderId);
         payload.put("amount", amount);
+        payload.put("paymentMethod", paymentMethod);
+        payload.put("orderInfo", "Thanh toan don hang #" + orderId);
         payload.put("correlationId", correlationId);
 
         HttpHeaders headers = new HttpHeaders();
@@ -44,24 +50,33 @@ public class PaymentServiceClient {
                     new ParameterizedTypeReference<Map<String, Object>>() {
                     });
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                Object paymentId = response.getBody().get("paymentId");
-                return new PaymentResult(true, paymentId == null ? null : paymentId.toString());
+                Object paymentId = response.getBody().get("id");
+                Object paymentUrl = response.getBody().get("paymentUrl");
+                Object status = response.getBody().get("status");
+                return new PaymentResult(
+                        true,
+                        paymentId == null ? null : paymentId.toString(),
+                        paymentUrl == null ? null : paymentUrl.toString(),
+                        status == null ? null : status.toString());
             }
         } catch (Exception ex) {
-            logger.warn("Payment service unavailable for orderId={}, using local mock approval: {}", orderId,
-                    ex.getMessage());
-            return new PaymentResult(true, "MOCK-PAYMENT-" + orderId);
+            logger.warn("Payment service unavailable for orderId={}: {}", orderId, ex.getMessage());
+            return new PaymentResult(false, null, null, null);
         }
-        return new PaymentResult(false, null);
+        return new PaymentResult(false, null, null, null);
     }
 
     public static class PaymentResult {
         private final boolean success;
         private final String paymentId;
+        private final String paymentUrl;
+        private final String status;
 
-        public PaymentResult(boolean success, String paymentId) {
+        public PaymentResult(boolean success, String paymentId, String paymentUrl, String status) {
             this.success = success;
             this.paymentId = paymentId;
+            this.paymentUrl = paymentUrl;
+            this.status = status;
         }
 
         public boolean isSuccess() {
@@ -70,6 +85,14 @@ public class PaymentServiceClient {
 
         public String getPaymentId() {
             return paymentId;
+        }
+
+        public String getPaymentUrl() {
+            return paymentUrl;
+        }
+
+        public String getStatus() {
+            return status;
         }
     }
 }

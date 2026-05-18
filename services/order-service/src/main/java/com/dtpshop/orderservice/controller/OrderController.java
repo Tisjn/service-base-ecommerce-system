@@ -159,11 +159,20 @@ public class OrderController {
         return new OrderResponseDto(
                 order.getId(),
                 order.getUserId(),
+                order.getAddressId(),
+                order.getOrderCode(),
                 order.getStatus(),
-                order.getTotalAmount(),
-                order.getShippingAddress(),
+                order.getSubtotal(),
+                order.getShippingFee(),
+                order.getFinalAmount(),
+                order.getNote(),
+                order.getPaymentMethod(),
+                order.getPaymentId(),
+                order.getPaymentUrl(),
                 order.getCreatedAt(),
                 order.getUpdatedAt(),
+                order.getCompletedAt(),
+                order.getCancelledAt(),
                 items);
     }
 

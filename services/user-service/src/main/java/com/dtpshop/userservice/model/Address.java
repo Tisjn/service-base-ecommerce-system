@@ -8,7 +8,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -23,21 +25,35 @@ public class Address {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "customer_id", nullable = false)
     private UserProfile user;
+
+    @Column(name = "recipient_name", length = 160)
+    private String recipientName;
+
+    @Column(length = 40)
+    private String phone;
+
+    @Column(length = 60)
+    private String label;
 
     @Column(length = 255)
     private String street;
 
     @Column(length = 100)
+    private String district;
+
+    @Column(length = 100)
     private String city;
 
-    @Column(length = 100)
-    private String state;
+    @Column(name = "is_default", nullable = false)
+    private boolean defaultAddress = false;
 
-    @Column(name = "postal_code", length = 20)
-    private String postalCode;
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
 
-    @Column(length = 100)
-    private String country;
+    @PrePersist
+    void onCreate() {
+        createdAt = Instant.now();
+    }
 }

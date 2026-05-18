@@ -90,10 +90,27 @@ export function updateUserProfile(accessToken, profileData) {
   return requestWithFallback("patch", "/users/me", accessToken, profileData);
 }
 
-export function getUserAddress(accessToken) {
-  return requestWithFallback("get", "/users/me/address", accessToken);
+export function getUserAddresses(accessToken) {
+  return requestWithFallback("get", "/users/me/addresses", accessToken);
 }
 
-export function updateUserAddress(accessToken, addressData) {
-  return requestWithFallback("patch", "/users/me/address", accessToken, addressData);
+export function createUserAddress(accessToken, addressData) {
+  return requestWithFallback("post", "/users/me/addresses", accessToken, addressData);
+}
+
+export function updateUserAddress(accessToken, addressId, addressData) {
+  return requestWithFallback(
+    "patch",
+    `/users/me/addresses/${addressId}`,
+    accessToken,
+    addressData,
+  );
+}
+
+export function deleteUserAddress(accessToken, addressId) {
+  return requestWithFallback(
+    "delete",
+    `/users/me/addresses/${addressId}`,
+    accessToken,
+  );
 }

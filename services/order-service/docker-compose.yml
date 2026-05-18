@@ -68,6 +68,7 @@ services:
       - SPRING_RABBITMQ_VIRTUAL_HOST=/
       # Downstream services
       - PRODUCT_SERVICE_URL=http://host.docker.internal:3003
+      - PAYMENT_SERVICE_URL=http://host.docker.internal:3005
       # Application port
       - SERVER_PORT=3004
     depends_on:

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getProfile, updateProfile } from "../../api/authApi";
+import { getUserAddresses } from "../../api/userApi";
 import { getCategories, getProducts } from "../../api/productApi";
 import orderApi from "../../api/orderApi";
 import OrderToast from "./orders/components/OrderToast";
@@ -56,7 +57,8 @@ function consolidateCartItems(items) {
 }
 
 const emptyCheckout = {
-  shippingAddress: "",
+  addressId: "",
+  note: "",
 };
 
 function resolveAccountCandidate(user) {
@@ -83,6 +85,7 @@ export default function CustomerOrderHubPage({ user }) {
   const [cart, setCart] = useState([]);
   const [orders, setOrders] = useState([]);
   const [adminOrders, setAdminOrders] = useState([]);
+  const [addresses, setAddresses] = useState([]);
   const [guestToken, setGuestToken] = useState(() => {
     const token = getGuestToken();
     localStorage.setItem(GUEST_TOKEN_KEY, token);
@@ -126,12 +129,6 @@ export default function CustomerOrderHubPage({ user }) {
   const showNotification = useCallback((type, text) => {
     setNotification({ type, text });
   }, []);
-
-  useEffect(() => {
-    if (account?.shippingAddress && !checkout.shippingAddress) {
-      setCheckout({ shippingAddress: account.shippingAddress });
-    }
-  }, [account, checkout.shippingAddress]);
 
   useEffect(() => {
     if (!notification) {
@@ -258,6 +255,36 @@ export default function CustomerOrderHubPage({ user }) {
     }
   }, [userId, showNotification]);
 
+  const loadAddresses = useCallback(async () => {
+    if (!userId) {
+      setAddresses([]);
+      return;
+    }
+
+    const accessToken = localStorage.getItem("authToken");
+    if (!accessToken) {
+      setAddresses([]);
+      return;
+    }
+
+    try {
+      const data = await getUserAddresses(accessToken);
+      const nextAddresses = Array.isArray(data) ? data : [];
+      setAddresses(nextAddresses);
+      setCheckout((prev) => {
+        if (prev.addressId || nextAddresses.length === 0) {
+          return prev;
+        }
+        const defaultAddress =
+          nextAddresses.find((address) => address.defaultAddress) ||
+          nextAddresses[0];
+        return { ...prev, addressId: String(defaultAddress.id) };
+      });
+    } catch (error) {
+      showNotification("error", error.message || "Không tải được địa chỉ giao hàng");
+    }
+  }, [showNotification, userId]);
+
   const loadAdminOrders = useCallback(async () => {
     if (!isAdmin) {
       return;
@@ -337,6 +364,7 @@ export default function CustomerOrderHubPage({ user }) {
       await Promise.all([
         loadCart(),
         loadOrders(),
+        loadAddresses(),
         isAdmin ? loadAdminOrders() : Promise.resolve(),
       ]);
     };
@@ -350,6 +378,7 @@ export default function CustomerOrderHubPage({ user }) {
     isAdmin,
     guestToken,
     loadAdminOrders,
+    loadAddresses,
     loadCart,
     loadOrders,
     mergeGuestCartToServer,
@@ -363,12 +392,13 @@ export default function CustomerOrderHubPage({ user }) {
       (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
       0,
     );
+    const shipping = subtotal >= 500000 || subtotal <= 0 ? 0 : 30000;
 
     return {
       itemCount,
       subtotal,
-      shipping: subtotal > 0 ? 0 : 0,
-      total: subtotal,
+      shipping,
+      total: subtotal + shipping,
     };
   }, [cart]);
 
@@ -513,16 +543,15 @@ export default function CustomerOrderHubPage({ user }) {
   async function handleCheckout(event, options = {}) {
     event.preventDefault();
 
-    const paymentMethod = options.paymentMethod || "cod";
-    const saveAddress = Boolean(options.saveAddress);
+    const paymentMethod = options.paymentMethod || "COD";
 
     if (!userId) {
       showNotification("error", "Không tìm thấy thông tin người dùng.");
       return;
     }
 
-    if (!checkout.shippingAddress.trim()) {
-      showNotification("error", "Vui lòng nhập địa chỉ giao hàng.");
+    if (!checkout.addressId) {
+      showNotification("error", "Vui lòng chọn địa chỉ giao hàng.");
       return;
     }
 
@@ -533,19 +562,21 @@ export default function CustomerOrderHubPage({ user }) {
 
     setSubmitting(true);
     try {
-      if (saveAddress && checkout.shippingAddress.trim()) {
-        await handleSaveShippingAddress(checkout.shippingAddress.trim());
-      }
-
       const order = await orderApi.createOrder(userId, {
-        shippingAddress: checkout.shippingAddress.trim(),
-        paymentMethod,
+        addressId: Number(checkout.addressId),
+        paymentMethod: paymentMethod.toUpperCase(),
+        note: checkout.note?.trim() || null,
       });
+
+      if (order?.paymentUrl) {
+        window.location.href = order.paymentUrl;
+        return;
+      }
 
       showNotification(
         "success",
-        `Đã tạo đơn hàng #${order?.orderId || "mới"}. Thanh toán ${
-          paymentMethod === "cod" ? "khi nhận hàng" : paymentMethod
+        `Đã tạo đơn hàng #${order?.orderCode || order?.orderId || "mới"}. Thanh toán ${
+          paymentMethod.toUpperCase() === "COD" ? "khi nhận hàng" : paymentMethod
         }, trạng thái hiện tại: ${getStatusLabel(order?.status || "PENDING")}.`,
       );
       setActiveTab("history");
@@ -640,10 +671,11 @@ export default function CustomerOrderHubPage({ user }) {
             cart={cart}
             checkout={checkout}
             setCheckout={setCheckout}
+            addresses={addresses}
+            onReloadAddresses={loadAddresses}
             onQuantityChange={handleQuantityChange}
             onRemoveFromCart={handleRemoveFromCart}
             onCheckout={handleCheckout}
-            onSaveShippingAddress={handleSaveShippingAddress}
             submitting={submitting}
             cartSummary={cartSummary}
           />
