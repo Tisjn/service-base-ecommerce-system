@@ -1,0 +1,33 @@
+services:
+  # =========================
+  # User Service
+  # =========================
+  user-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: user-service
+    ports:
+      - "3002:3002"
+    environment:
+      # AWS RDS MySQL
+      - RDS_HOST=database-1-instance-1.cvwyy4mmuaiw.ap-southeast-1.rds.amazonaws.com
+      - RDS_PORT=3306
+      - RDS_DB=ecommerce_data
+      - RDS_USER=admin
+      - RDS_PASSWORD=Tinle091104
+      - RDS_SSL=false
+      - SPRING_DATASOURCE_URL=jdbc:mysql://database-1-instance-1.cvwyy4mmuaiw.ap-southeast-1.rds.amazonaws.com:3306/ecommerce_data?useSSL=false&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=admin
+      - SPRING_DATASOURCE_PASSWORD=Tinle091104
+      # Downstream services
+      - ORDER_SERVICE_URL=http://host.docker.internal:3004
+      # Application port
+      - SERVER_PORT=3002
+    networks:
+      - app-network
+    restart: on-failure
+
+networks:
+  app-network:
+    driver: bridge

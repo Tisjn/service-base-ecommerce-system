@@ -98,6 +98,20 @@ router.post(
   authController.resetPassword,
 );
 
+router.put(
+  "/profile/password",
+  [
+    body("currentPassword")
+      .notEmpty()
+      .withMessage("Mat khau hien tai khong duoc de trong"),
+    body("newPassword")
+      .isLength({ min: 8 })
+      .withMessage("Mat khau moi phai co it nhat 8 ky tu"),
+  ],
+  validateRequest,
+  authController.changePassword,
+);
+
 router.post(
   "/refresh",
   [

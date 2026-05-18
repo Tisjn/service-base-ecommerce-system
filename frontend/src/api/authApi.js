@@ -101,6 +101,14 @@ export async function deleteProfileAvatar(accessToken) {
   });
 }
 
+export async function changePassword(accessToken, passwordData) {
+  return putWithFallback("/auth/profile/password", passwordData, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
 export async function forgotPassword(email) {
   return postWithFallback("/auth/password/forgot", { email });
 }

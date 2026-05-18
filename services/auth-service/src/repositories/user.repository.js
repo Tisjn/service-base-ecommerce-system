@@ -49,6 +49,14 @@ async function updatePassword(email, password) {
   return result.affectedRows > 0;
 }
 
+async function updatePasswordById(id, password) {
+  const [result] = await db.query("UPDATE users SET password = ? WHERE id = ?", [
+    password,
+    id,
+  ]);
+  return result.affectedRows > 0;
+}
+
 async function updateProfile(id, { fullName }) {
   const [result] = await db.query(
     "UPDATE users SET full_name = ? WHERE id = ?",
@@ -80,6 +88,7 @@ module.exports = {
   findById,
   createUser,
   updatePassword,
+  updatePasswordById,
   updateProfile,
   updateAvatarUrl,
 };

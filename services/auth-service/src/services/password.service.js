@@ -3,7 +3,7 @@ const userRepository = require("../repositories/user.repository");
 const otpRepository = require("../repositories/otp.repository");
 const tokenRepository = require("../repositories/token.repository");
 const { generateOTP } = require("../utils/otp.utils");
-const { hashPassword } = require("../utils/hash.utils");
+const { comparePassword, hashPassword } = require("../utils/hash.utils");
 const { sendOtpEmail } = require("../utils/mailer.utils");
 const AppError = require("../utils/httpError");
 
@@ -87,7 +87,37 @@ async function verifyResetOtp({ email, otp, newPassword }) {
   };
 }
 
+async function changePassword({ userId, currentPassword, newPassword }) {
+  const user = await userRepository.findById(userId);
+  if (!user) {
+    throw new AppError(404, "Nguoi dung khong ton tai");
+  }
+
+  const validPassword = await comparePassword(currentPassword, user.password);
+  if (!validPassword) {
+    throw new AppError(400, "Mat khau hien tai khong dung");
+  }
+
+  const samePassword = await comparePassword(newPassword, user.password);
+  if (samePassword) {
+    throw new AppError(400, "Mat khau moi phai khac mat khau hien tai");
+  }
+
+  const hashedPassword = await hashPassword(newPassword);
+  const updated = await userRepository.updatePasswordById(userId, hashedPassword);
+  if (!updated) {
+    throw new AppError(500, "Khong the cap nhat mat khau");
+  }
+
+  await tokenRepository.deleteRefreshToken(userId);
+
+  return {
+    message: "Doi mat khau thanh cong. Vui long dang nhap lai.",
+  };
+}
+
 module.exports = {
   sendResetOtp,
   verifyResetOtp,
+  changePassword,
 };
