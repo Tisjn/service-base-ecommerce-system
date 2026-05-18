@@ -1,5 +1,6 @@
 package com.dtpshop.orderservice.service;
 
+import com.dtpshop.orderservice.client.PaymentServiceClient;
 import com.dtpshop.orderservice.client.ProductServiceClient;
 import com.dtpshop.orderservice.dto.CartItemDto;
 import com.dtpshop.orderservice.dto.OrderProductDetailDto;
@@ -27,10 +28,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class OrderService {
 
+    private static final BigDecimal FREE_SHIPPING_THRESHOLD = new BigDecimal("500000");
+    private static final BigDecimal STANDARD_SHIPPING_FEE = new BigDecimal("30000");
+
     private final OrderRepository orderRepository;
     private final EventPublisherService eventPublisherService;
     private final CartService cartService;
     private final ProductServiceClient productServiceClient;
+    private final PaymentServiceClient paymentServiceClient;
     private final ProductCommentRepository productCommentRepository;
     private final OrderWebSocketNotifier orderWebSocketNotifier;
 
@@ -39,12 +44,14 @@ public class OrderService {
             EventPublisherService eventPublisherService,
             CartService cartService,
             ProductServiceClient productServiceClient,
+            PaymentServiceClient paymentServiceClient,
             ProductCommentRepository productCommentRepository,
             OrderWebSocketNotifier orderWebSocketNotifier) {
         this.orderRepository = orderRepository;
         this.eventPublisherService = eventPublisherService;
         this.cartService = cartService;
         this.productServiceClient = productServiceClient;
+        this.paymentServiceClient = paymentServiceClient;
         this.productCommentRepository = productCommentRepository;
         this.orderWebSocketNotifier = orderWebSocketNotifier;
     }
@@ -52,7 +59,7 @@ public class OrderService {
     public OrderService(OrderRepository orderRepository,
             EventPublisherService eventPublisherService,
             CartService cartService) {
-        this(orderRepository, eventPublisherService, cartService, null, null, null);
+        this(orderRepository, eventPublisherService, cartService, null, null, null, null);
     }
 
     @Transactional
@@ -69,13 +76,22 @@ public class OrderService {
 
         Order order = new Order();
         order.setUserId(userId);
-        order.setShippingAddress(requestDto.getShippingAddress());
+        order.setAddressId(requestDto.getAddressId());
+        order.setOrderCode("DTP-" + System.currentTimeMillis());
         order.setStatus(OrderStatus.PENDING);
+        order.setNote(blankToNull(requestDto.getNote()));
+        order.setPaymentMethod(normalizePaymentMethod(requestDto.getPaymentMethod()));
 
-        BigDecimal total = itemsToProcess.stream()
+        BigDecimal subtotal = itemsToProcess.stream()
                 .map(CartItemDto::getSubtotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        order.setTotalAmount(total);
+        BigDecimal shippingFee = subtotal.compareTo(FREE_SHIPPING_THRESHOLD) >= 0
+                ? BigDecimal.ZERO
+                : STANDARD_SHIPPING_FEE;
+        BigDecimal finalAmount = subtotal.add(shippingFee);
+        order.setSubtotal(subtotal);
+        order.setShippingFee(shippingFee);
+        order.setFinalAmount(finalAmount);
 
         final Order pendingOrder = order;
         List<OrderItem> items = itemsToProcess.stream().map(cartItem -> {
@@ -90,14 +106,28 @@ public class OrderService {
         }).collect(Collectors.toList());
         items.forEach(pendingOrder::addItem);
         orderRepository.save(pendingOrder);
+
+        if (paymentServiceClient != null) {
+            PaymentServiceClient.PaymentResult paymentResult = paymentServiceClient.createPayment(
+                    pendingOrder.getId(),
+                    pendingOrder.getFinalAmount(),
+                    pendingOrder.getPaymentMethod(),
+                    "order-" + pendingOrder.getId());
+            if (!paymentResult.isSuccess()) {
+                throw new IllegalStateException("Khong tao duoc giao dich thanh toan.");
+            }
+            pendingOrder.setPaymentId(parseLong(paymentResult.getPaymentId()));
+            pendingOrder.setPaymentUrl(paymentResult.getPaymentUrl());
+        }
+
         // Publish OrderCreated event to other services via AMQP
         if (eventPublisherService != null) {
             com.dtpshop.orderservice.event.OrderCreatedEvent evt = new com.dtpshop.orderservice.event.OrderCreatedEvent(
                     pendingOrder.getId(),
                     pendingOrder.getUserId(),
-                    pendingOrder.getShippingAddress(),
+                    String.valueOf(pendingOrder.getAddressId()),
                     itemsToProcess,
-                    pendingOrder.getTotalAmount(),
+                    pendingOrder.getFinalAmount(),
                     "order-" + pendingOrder.getId(),
                     pendingOrder.getCreatedAt());
             eventPublisherService.publishOrderCreated(evt);
@@ -105,9 +135,12 @@ public class OrderService {
         // Notify connected admin clients via WebSocket
         if (orderWebSocketNotifier != null) {
             com.dtpshop.orderservice.dto.OrderResponseDto notifyDto = new com.dtpshop.orderservice.dto.OrderResponseDto(
-                    pendingOrder.getId(), pendingOrder.getUserId(), pendingOrder.getStatus(),
-                    pendingOrder.getTotalAmount(),
-                    pendingOrder.getShippingAddress(), pendingOrder.getCreatedAt(), pendingOrder.getUpdatedAt(),
+                    pendingOrder.getId(), pendingOrder.getUserId(), pendingOrder.getAddressId(),
+                    pendingOrder.getOrderCode(), pendingOrder.getStatus(),
+                    pendingOrder.getSubtotal(), pendingOrder.getShippingFee(), pendingOrder.getFinalAmount(),
+                    pendingOrder.getNote(), pendingOrder.getPaymentMethod(), pendingOrder.getPaymentId(),
+                    pendingOrder.getPaymentUrl(), pendingOrder.getCreatedAt(), pendingOrder.getUpdatedAt(),
+                    pendingOrder.getCompletedAt(), pendingOrder.getCancelledAt(),
                     itemsToProcess);
             orderWebSocketNotifier.notifyNewOrder(notifyDto);
         }
@@ -151,6 +184,9 @@ public class OrderService {
             throw new IllegalStateException("Invalid status transition: " + current + " -> " + status);
         }
         order.setStatus(status);
+        if (status == OrderStatus.DELIVERED) {
+            order.setCompletedAt(LocalDateTime.now());
+        }
         order.updateTimestamp();
         return orderRepository.save(order);
     }
@@ -159,6 +195,7 @@ public class OrderService {
     public Order cancelOrder(Long orderId, String reason, String correlationId) {
         Order order = getOrder(orderId);
         order.setStatus(OrderStatus.CANCELLED);
+        order.setCancelledAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
         Order cancelled = orderRepository.save(order);
         if (productServiceClient != null) {
@@ -181,9 +218,35 @@ public class OrderService {
     public void confirmOrder(Long orderId, String paymentId) {
         Order order = getOrder(orderId);
         order.setStatus(OrderStatus.CONFIRMED);
-        order.setPaymentId(paymentId);
+        order.setPaymentId(parseLong(paymentId));
         order.updateTimestamp();
         orderRepository.save(order);
+    }
+
+    private String normalizePaymentMethod(String method) {
+        if (method == null || method.isBlank()) {
+            return "COD";
+        }
+        String normalized = method.trim().toUpperCase();
+        if (!normalized.equals("COD") && !normalized.equals("MOMO")) {
+            throw new IllegalArgumentException("paymentMethod chi ho tro COD hoac MOMO");
+        }
+        return normalized;
+    }
+
+    private Long parseLong(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     public OrderProductDetailDto getOrderProductDetail(Long userId, Long productId) {

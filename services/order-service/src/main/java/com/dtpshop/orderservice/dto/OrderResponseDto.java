@@ -12,10 +12,23 @@ import lombok.Data;
 public class OrderResponseDto {
     private Long orderId;
     private Long userId;
+    private Long addressId;
+    private String orderCode;
     private OrderStatus status;
-    private BigDecimal totalAmount;
-    private String shippingAddress;
+    private BigDecimal subtotal;
+    private BigDecimal shippingFee;
+    private BigDecimal finalAmount;
+    private String note;
+    private String paymentMethod;
+    private Long paymentId;
+    private String paymentUrl;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private LocalDateTime completedAt;
+    private LocalDateTime cancelledAt;
     private List<CartItemDto> items;
+
+    public BigDecimal getTotalAmount() {
+        return finalAmount;
+    }
 }

@@ -256,7 +256,7 @@ export default function OrderHistorySection({
                             {getStatusLabel(order.status)}
                           </span>
                           <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                            COD
+                            {order.paymentMethod || "COD"}
                           </span>
                         </div>
 
@@ -272,7 +272,7 @@ export default function OrderHistorySection({
                           <Info
                             label="Tổng thanh toán"
                             value={currencyFormatter.format(
-                              order.totalAmount || 0,
+                              order.finalAmount || order.totalAmount || 0,
                             )}
                           />
                         </div>

@@ -9,7 +9,10 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -32,24 +35,48 @@ public class Order {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    @Column(name = "shipping_address", length = 1000)
-    private String shippingAddress;
+    @Column(name = "address_id", nullable = false)
+    private Long addressId;
 
-    @Column(name = "total_amount", nullable = false)
-    private BigDecimal totalAmount;
+    @Column(name = "order_code", nullable = false, length = 80)
+    private String orderCode;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "order_status", nullable = false, length = 40)
     private OrderStatus status = OrderStatus.PENDING;
 
-    @Column(name = "payment_id")
-    private String paymentId;
+    @Column(nullable = false)
+    private BigDecimal subtotal;
+
+    @Column(name = "shipping_fee", nullable = false)
+    private BigDecimal shippingFee;
+
+    @Column(name = "final_amount", nullable = false)
+    private BigDecimal finalAmount;
+
+    @Column(columnDefinition = "TEXT")
+    private String note;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt = LocalDateTime.now();
+    private LocalDateTime updatedAt;
+
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
+
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+
+    @Transient
+    private String paymentUrl;
+
+    @Transient
+    private String paymentMethod;
+
+    @Transient
+    private Long paymentId;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItem> items = new ArrayList<>();
@@ -59,7 +86,29 @@ public class Order {
         this.items.add(item);
     }
 
+    @PrePersist
+    void onCreate() {
+        LocalDateTime now = LocalDateTime.now();
+        createdAt = now;
+        updatedAt = now;
+    }
+
+    @PreUpdate
+    void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
+
     public void updateTimestamp() {
         this.updatedAt = LocalDateTime.now();
+    }
+
+    public BigDecimal getTotalAmount() {
+        return finalAmount;
+    }
+
+    public void setTotalAmount(BigDecimal totalAmount) {
+        this.finalAmount = totalAmount;
+        this.subtotal = totalAmount;
+        this.shippingFee = BigDecimal.ZERO;
     }
 }

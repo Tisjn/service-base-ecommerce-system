@@ -56,12 +56,12 @@ export default function OrderDetailModal({ orderId, onClose }) {
                 {new Intl.NumberFormat("vi-VN", {
                   style: "currency",
                   currency: "VND",
-                }).format(order.totalAmount || 0)}
+                }).format(order.finalAmount || order.totalAmount || 0)}
               </div>
               <div className="mt-3 rounded-md border bg-slate-50 p-3">
                 <div className="font-semibold">Địa chỉ giao</div>
                 <div className="text-sm text-slate-700">
-                  {order.shippingAddress || "-"}
+                  {order.addressId ? `Address #${order.addressId}` : order.shippingAddress || "-"}
                 </div>
               </div>
               <div>

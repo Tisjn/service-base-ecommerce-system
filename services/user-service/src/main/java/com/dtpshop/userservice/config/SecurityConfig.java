@@ -29,8 +29,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers(HttpMethod.GET, "/users/me", "/api/users/me").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/users/me", "/api/users/me").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/users/me/address", "/api/users/me/address").authenticated()
-                        .requestMatchers(HttpMethod.PATCH, "/users/me/address", "/api/users/me/address").authenticated()
+                        .requestMatchers("/users/me/addresses/**", "/api/users/me/addresses/**").authenticated()
                         .requestMatchers("/users/**", "/api/users/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(gatewayAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
