@@ -20,6 +20,10 @@ services:
       - MOMO_REDIRECT_URL=${MOMO_REDIRECT_URL:-http://localhost:3005/payments/return/momo}
       - MOMO_IPN_URL=${MOMO_IPN_URL:-http://localhost:3005/payments/webhook/momo}
       - MOMO_FRONTEND_RETURN_URL=${MOMO_FRONTEND_RETURN_URL:-http://localhost:5173/customer/orders}
+      - MOMO_REQUEST_TYPE=${MOMO_REQUEST_TYPE:-payWithMethod}
+      - MOMO_PARTNER_NAME=${MOMO_PARTNER_NAME:-Test}
+      - MOMO_STORE_ID=${MOMO_STORE_ID:-MomoTestStore}
+      - MOMO_LANG=${MOMO_LANG:-vi}
     networks:
       - app-network
     restart: on-failure
