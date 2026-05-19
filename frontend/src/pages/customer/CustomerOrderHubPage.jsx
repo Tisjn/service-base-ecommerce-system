@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getProfile, updateProfile } from "../../api/authApi";
 import { getUserAddresses } from "../../api/userApi";
 import { getCategories, getProducts } from "../../api/productApi";
@@ -59,7 +60,19 @@ function resolveRole(user) {
   return String(rawRole).toUpperCase();
 }
 
-export default function CustomerOrderHubPage({ user }) {
+function getPathForTab(tab) {
+  switch (tab) {
+    case "cart":
+      return "/customer/cart";
+    case "history":
+      return "/customer/orders";
+    default:
+      return "/customer/products";
+  }
+}
+
+export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
+  const navigate = useNavigate();
   const [account, setAccount] = useState(resolveAccountCandidate(user));
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
@@ -68,7 +81,7 @@ export default function CustomerOrderHubPage({ user }) {
   const [adminOrders, setAdminOrders] = useState([]);
   const [addresses, setAddresses] = useState([]);
   const notifiedLoginUserRef = useRef(null);
-  const [activeTab, setActiveTab] = useState("catalog");
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -102,6 +115,15 @@ export default function CustomerOrderHubPage({ user }) {
   useEffect(() => {
     setAccount(resolveAccountCandidate(user));
   }, [user]);
+
+  useEffect(() => {
+    setActiveTab(initialTab || "catalog");
+  }, [initialTab]);
+
+  function navigateToTab(tab) {
+    setActiveTab(tab);
+    navigate(getPathForTab(tab));
+  }
 
   const showNotification = useCallback((type, text) => {
     setNotification({ type, text });
@@ -219,6 +241,27 @@ export default function CustomerOrderHubPage({ user }) {
       setOrdersLoading(false);
     }
   }, [userId, showNotification]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get("paymentStatus");
+    const orderId = params.get("orderId");
+    if (!paymentStatus || !orderId) {
+      return;
+    }
+
+    setActiveTab("history");
+    loadOrders();
+    showNotification(
+      paymentStatus.toUpperCase() === "PAID" ? "success" : "error",
+      paymentStatus.toUpperCase() === "PAID"
+        ? `Thanh toán MoMo cho đơn #${orderId} thành công.`
+        : `Thanh toán MoMo cho đơn #${orderId} chưa thành công.`,
+    );
+
+    const cleanUrl = `${window.location.pathname}${window.location.hash || ""}`;
+    window.history.replaceState({}, "", cleanUrl);
+  }, [loadOrders, showNotification]);
 
   const loadAddresses = useCallback(async () => {
     if (!userId) {
@@ -377,7 +420,7 @@ export default function CustomerOrderHubPage({ user }) {
         imageUrl: product.imageUrl || product.imageURL || null,
       });
       showNotification("success", `Đã thêm ${product.name} vào giỏ hàng.`);
-      setActiveTab("cart");
+      navigateToTab("cart");
       loadCart().catch((error) => {
         showNotification(
           "error",
@@ -461,7 +504,7 @@ export default function CustomerOrderHubPage({ user }) {
           paymentMethod.toUpperCase() === "COD" ? "khi nhận hàng" : paymentMethod
         }, trạng thái hiện tại: ${getStatusLabel(order?.status || "PENDING")}.`,
       );
-      setActiveTab("history");
+      navigateToTab("history");
       await Promise.all([loadOrders(), loadCart(), loadCatalog()]);
     } catch (error) {
       showNotification("error", error.message || "Không tạo được đơn hàng");
@@ -579,7 +622,7 @@ export default function CustomerOrderHubPage({ user }) {
             product={selectedProduct}
             userId={userId}
             updatingProductId={updatingProductId}
-            onBack={() => setActiveTab("catalog")}
+            onBack={() => navigateToTab("catalog")}
             onAddToCart={handleAddToCart}
           />
         );
@@ -631,7 +674,7 @@ export default function CustomerOrderHubPage({ user }) {
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => navigateToTab(tab.id)}
                 className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                   activeTab === tab.id
                     ? "bg-orange-600 text-white shadow-lg shadow-orange-500/20"

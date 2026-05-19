@@ -10,6 +10,7 @@ import com.dtpshop.productservice.model.Category;
 import com.dtpshop.productservice.model.CartItem;
 import com.dtpshop.productservice.model.Product;
 import com.dtpshop.productservice.model.ProductStatus;
+import com.dtpshop.productservice.client.OrderServiceClient;
 import com.dtpshop.productservice.repository.CategoryRepository;
 import com.dtpshop.productservice.repository.ProductRepository;
 import jakarta.transaction.Transactional;
@@ -30,12 +31,14 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final CartService cartService;
+    private final OrderServiceClient orderServiceClient;
 
     public ProductService(ProductRepository productRepository, CategoryRepository categoryRepository,
-            CartService cartService) {
+            CartService cartService, OrderServiceClient orderServiceClient) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.cartService = cartService;
+        this.orderServiceClient = orderServiceClient;
     }
 
     public Page<Product> listActiveProducts(Pageable pageable) {
@@ -132,9 +135,26 @@ public class ProductService {
     public Product softDeleteProduct(Long id) {
         Product product = getProductEntity(id);
         if (product.getReservedQuantity() > 0 || cartService.isProductInCart(id)) {
-            throw new IllegalStateException("Cannot delete product because it is reserved or present in a cart");
+            throw new IllegalStateException(
+                    "Không thể xóa sản phẩm vì sản phẩm đang được giữ hoặc có trong giỏ hàng");
+        }
+        if (orderServiceClient.hasProductOrders(id)) {
+            throw new IllegalStateException(
+                    "Không thể xóa sản phẩm vì đã có lịch sử đơn hàng");
         }
         product.markDeleted();
+        product.updateTimestamp();
+        return productRepository.save(product);
+    }
+
+    @Transactional
+    @CacheEvict(value = "products", allEntries = true)
+    public Product restoreProduct(Long id) {
+        Product product = getProductEntity(id);
+        if (product.getStatus() != ProductStatus.HIDDEN) {
+            throw new IllegalStateException("Chỉ có thể bỏ ẩn sản phẩm đang ở trạng thái ẩn");
+        }
+        product.setStatus(ProductStatus.ACTIVE);
         product.updateTimestamp();
         return productRepository.save(product);
     }

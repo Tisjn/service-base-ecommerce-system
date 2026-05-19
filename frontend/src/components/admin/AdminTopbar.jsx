@@ -1,15 +1,7 @@
 import React from "react";
 import { useOrderNotifications } from "../../context/OrderNotificationContext";
-import BrandLogo from "../BrandLogo.jsx";
 
-export default function AdminTopbar({
-  user,
-  onLogout,
-  onNavigate,
-  filterDraft,
-  setFilterDraft,
-  applyFilters,
-}) {
+export default function AdminTopbar({ user, onLogout, onNavigate }) {
   const { notifications, unreadCount, markAllRead, openOrder } =
     useOrderNotifications() || {
       notifications: [],
@@ -19,13 +11,16 @@ export default function AdminTopbar({
     };
   const [open, setOpen] = React.useState(false);
 
+  const displayName = user?.fullName || user?.email || "Admin";
+  const avatarUrl = user?.avatarUrl || "";
+  const initial = displayName.slice(0, 1).toUpperCase();
+
   function toggle() {
-    setOpen((v) => !v);
+    setOpen((value) => !value);
     if (!open) markAllRead();
   }
 
   function handleNotificationClick(orderId) {
-    // navigate to orders view and request opening the order detail
     if (typeof openOrder === "function") {
       openOrder(orderId);
     }
@@ -36,37 +31,32 @@ export default function AdminTopbar({
       window.history.pushState({}, "", `/orders/${orderId}`);
       window.dispatchEvent(new PopStateEvent("popstate"));
     } catch {
-      // ignore if history not available
+      // Browser history is optional for this shortcut.
     }
     setOpen(false);
   }
 
   return (
     <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-[#ead8cc] bg-[linear-gradient(180deg,rgba(255,250,245,1),rgba(255,244,236,1))] px-4 lg:px-8">
-      <div className="flex min-w-0 items-center gap-8">
-        <div className="hidden items-center sm:flex">
-          <BrandLogo className="h-14 w-52 object-contain object-left" />
-        </div>
-        <div className="relative w-full max-w-96">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#737686] opacity-60">
-            search
-          </span>
-          <input
-            className="w-full rounded-lg border-none bg-white/90 py-2 pl-10 pr-4 text-sm text-[#111111] transition focus:bg-white focus:ring-2 focus:ring-[#d45a14]"
-            placeholder="Tìm kiếm sản phẩm..."
-            value={filterDraft?.search || ""}
-            onChange={(event) =>
-              setFilterDraft &&
-              setFilterDraft((prev) => ({
-                ...prev,
-                search: event.target.value,
-              }))
-            }
-            onKeyDown={(event) => {
-              if (event.key === "Enter") applyFilters && applyFilters();
-            }}
-            type="text"
+      <div className="flex min-w-0 items-center gap-3">
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt={displayName}
+            className="h-10 w-10 rounded-full object-cover"
           />
+        ) : (
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-600 text-sm font-extrabold text-white">
+            {initial}
+          </div>
+        )}
+        <div className="min-w-0">
+          <p className="truncate text-sm font-extrabold text-[#191b23]">
+            {displayName}
+          </p>
+          <p className="truncate text-xs font-medium text-[#737686]">
+            {user?.role || "ADMIN"}
+          </p>
         </div>
       </div>
 
@@ -80,7 +70,7 @@ export default function AdminTopbar({
           >
             <span className="material-symbols-outlined">notifications</span>
             {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs text-white">
+              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs text-white">
                 {unreadCount}
               </span>
             )}
@@ -103,21 +93,25 @@ export default function AdminTopbar({
                     Không có thông báo
                   </div>
                 ) : (
-                  notifications.map((n) => (
+                  notifications.map((notification) => (
                     <button
-                      key={n.id}
-                      onClick={() => handleNotificationClick(n.orderId)}
-                      className="mb-2 w-full text-left rounded-md border p-2 text-sm hover:bg-slate-50"
+                      key={notification.id}
+                      onClick={() =>
+                        handleNotificationClick(notification.orderId)
+                      }
+                      className="mb-2 w-full rounded-md border p-2 text-left text-sm hover:bg-slate-50"
                     >
-                      <div className="font-semibold">Đơn #{n.orderId}</div>
+                      <div className="font-semibold">
+                        Đơn #{notification.orderId}
+                      </div>
                       <div className="text-xs text-slate-500">
-                        {new Date(n.createdAt).toLocaleString()}
+                        {new Date(notification.createdAt).toLocaleString()}
                       </div>
                       <div className="mt-1">
                         {new Intl.NumberFormat("vi-VN", {
                           style: "currency",
                           currency: "VND",
-                        }).format(n.total)}
+                        }).format(notification.total)}
                       </div>
                     </button>
                   ))
@@ -129,7 +123,9 @@ export default function AdminTopbar({
 
         <button
           type="button"
+          onClick={() => onNavigate?.("settings")}
           className="material-symbols-outlined rounded-full p-2 text-[#434655] transition-colors hover:bg-orange-50"
+          title="Cài đặt"
         >
           settings
         </button>
@@ -139,10 +135,7 @@ export default function AdminTopbar({
           onClick={onLogout}
           className="flex items-center gap-3 active:opacity-80"
         >
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-600 text-xs font-extrabold text-white">
-            {(user?.fullName || user?.email || "A").slice(0, 1).toUpperCase()}
-          </div>
-          <span className="hidden font-semibold text-sm text-[#d45a14] sm:block">
+          <span className="hidden text-sm font-semibold text-[#d45a14] sm:block">
             Đăng xuất
           </span>
         </button>

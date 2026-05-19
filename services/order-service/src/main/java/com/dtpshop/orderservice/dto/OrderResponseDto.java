@@ -21,6 +21,7 @@ public class OrderResponseDto {
     private String note;
     private String paymentMethod;
     private Long paymentId;
+    private String paymentStatus;
     private String paymentUrl;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

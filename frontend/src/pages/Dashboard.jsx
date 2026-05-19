@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import AccountProfilePage from "./customer/AccountProfilePage.jsx";
 import CustomerOrderHubPage from "./customer/CustomerOrderHubPage";
 import ProductAdminPage from "./admin/products/ProductAdminPage";
@@ -11,92 +12,195 @@ function isAdminUser(user) {
     .includes("ADMIN");
 }
 
-function Dashboard({ onLogout, onUserUpdate, onRequestLogin, user }) {
+function getDisplayName(user) {
+  return user?.fullName || user?.email || "Khách hàng";
+}
+
+function getInitial(value) {
+  return String(value || "K").trim().slice(0, 1).toUpperCase();
+}
+
+function Dashboard({
+  routeView,
+  customerTab,
+  onLogout,
+  onUserUpdate,
+  onRequestLogin,
+  user,
+}) {
+  const navigate = useNavigate();
+  const { section } = useParams();
   const isAdmin = isAdminUser(user);
   const [activeView, setActiveView] = useState(() =>
-    isAdminUser(user) ? "products" : "orders",
+    routeView || (isAdminUser(user) ? "products" : "orders"),
   );
 
   useEffect(() => {
-    setActiveView(isAdmin ? "products" : "orders");
-  }, [isAdmin, user?.id, user?.userId, user?.email]);
+    setActiveView(routeView || (isAdmin ? "products" : "orders"));
+  }, [isAdmin, routeView, user?.id, user?.userId, user?.email]);
+
+  function navigateTo(view) {
+    setActiveView(view);
+    if (view === "account") {
+      navigate("/customer/account");
+      return;
+    }
+    if (view === "products") {
+      navigate("/admin/products");
+      return;
+    }
+    navigate("/customer/products");
+  }
 
   if (activeView === "products" && isAdmin) {
     return (
       <ProductAdminPage
         user={user}
+        initialSection={section || "products"}
         onLogout={onLogout}
-        onNavigate={setActiveView}
+        onNavigate={(target) => {
+          const adminSections = [
+            "dashboard",
+            "products",
+            "orders",
+            "customers",
+            "analytics",
+            "support",
+            "settings",
+          ];
+          if (adminSections.includes(target)) {
+            navigate(`/admin/${target}`);
+            return;
+          }
+          navigateTo(target);
+        }}
+        onUserUpdate={onUserUpdate}
       />
     );
   }
 
+  const customerPageTitle =
+    customerTab === "cart"
+      ? "Giỏ hàng"
+      : customerTab === "history"
+        ? "Đơn hàng"
+        : "Sản phẩm";
   const pageTitle =
     activeView === "products"
       ? "Quản trị sản phẩm"
       : activeView === "account"
         ? "Tài khoản"
-        : "Đơn hàng";
+        : customerPageTitle;
+  const displayName = getDisplayName(user);
+  const avatarUrl = user?.avatarUrl || "";
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,0.12),transparent_28%),radial-gradient(circle_at_top_right,rgba(17,17,17,0.06),transparent_30%),linear-gradient(180deg,#fffaf5_0%,#f7f4ef_100%)] px-4 py-6 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,0.10),transparent_28%),radial-gradient(circle_at_top_right,rgba(15,23,42,0.06),transparent_30%),linear-gradient(180deg,#fffaf5_0%,#f7f4ef_100%)] px-4 py-5 sm:px-6 lg:px-8">
       <section className="mx-auto grid max-w-7xl gap-6">
-        <div className="rounded-4xl border border-[#ead8cc] bg-white/90 p-5 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.28)] backdrop-blur sm:p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex min-w-0 flex-col gap-3">
-              <BrandLogo className="h-24 w-full max-w-[560px] object-contain object-left sm:h-28" />
-              <div>
-              <h1 className="sr-only">
-                {pageTitle}
-              </h1>
-              <p className="text-sm text-slate-600">
-                Xin chào {user?.fullName || user?.email || "người dùng"}. Bạn có
-                thể mua hàng, theo dõi đơn, quản trị và chỉnh sửa hồ sơ.
-              </p>
+        <div className="overflow-hidden rounded-4xl border border-[#ead8cc] bg-white/95 shadow-[0_24px_80px_-42px_rgba(15,23,42,0.34)] backdrop-blur">
+          <div className="flex flex-col gap-5 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-center gap-5">
+              <BrandLogo className="h-16 w-56 shrink-0 object-contain object-left sm:h-20 sm:w-72" />
+              <div className="hidden h-12 w-px bg-[#ead8cc] lg:block" />
+              <div className="min-w-0">
+                <h1 className="text-2xl font-extrabold tracking-tight text-slate-950 [font-family:Manrope,system-ui,sans-serif]">
+                  {pageTitle}
+                </h1>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+                  Mua sắm, theo dõi đơn hàng và quản lý hồ sơ cá nhân trong một
+                  không gian rõ ràng.
+                </p>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <NavButton
-                active={activeView === "orders"}
-                onClick={() => setActiveView("orders")}
-              >
-                Đơn hàng
-              </NavButton>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
               {user ? (
-                <NavButton
-                  active={activeView === "account"}
-                  onClick={() => setActiveView("account")}
-                >
-                  Tài khoản
-                </NavButton>
+                <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt={displayName}
+                      className="h-12 w-12 rounded-full object-cover ring-2 ring-white"
+                    />
+                  ) : (
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-600 text-base font-extrabold text-white ring-2 ring-white">
+                      {getInitial(displayName)}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-extrabold text-slate-950">
+                      {displayName}
+                    </p>
+                    <p className="truncate text-xs text-slate-500">
+                      {user?.email || "Tài khoản khách hàng"}
+                    </p>
+                  </div>
+                </div>
               ) : null}
-              {isAdmin && (
+
+              <div className="flex flex-wrap items-center gap-3">
                 <NavButton
-                  active={activeView === "products"}
-                  activeClass="bg-orange-600 text-white shadow-lg shadow-orange-500/20"
-                  onClick={() => setActiveView("products")}
+                  active={activeView === "orders" && customerTab === "catalog"}
+                  onClick={() => {
+                    setActiveView("orders");
+                    navigate("/customer/products");
+                  }}
                 >
                   Sản phẩm
                 </NavButton>
-              )}
-              {user ? (
-                <button
-                  type="button"
-                  onClick={onLogout}
-                  className="rounded-2xl bg-orange-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-orange-500/20 transition hover:-translate-y-0.5 hover:bg-orange-700"
+                <NavButton
+                  active={activeView === "orders" && customerTab === "cart"}
+                  onClick={() => {
+                    setActiveView("orders");
+                    navigate("/customer/cart");
+                  }}
                 >
-                  Đăng xuất
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onRequestLogin}
-                  className="rounded-2xl bg-orange-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-orange-700"
+                  Giỏ hàng
+                </NavButton>
+                <NavButton
+                  active={activeView === "orders" && customerTab === "history"}
+                  onClick={() => {
+                    setActiveView("orders");
+                    navigate("/customer/orders");
+                  }}
                 >
-                  Đăng nhập
-                </button>
-              )}
+                  Đơn hàng
+                </NavButton>
+                {user ? (
+                  <NavButton
+                    active={activeView === "account"}
+                    onClick={() => navigateTo("account")}
+                  >
+                    Tài khoản
+                  </NavButton>
+                ) : null}
+                {isAdmin && (
+                  <NavButton
+                    active={activeView === "products"}
+                    activeClass="bg-orange-600 text-white shadow-lg shadow-orange-500/20"
+                    onClick={() => navigateTo("products")}
+                  >
+                    Sản phẩm
+                  </NavButton>
+                )}
+                {user ? (
+                  <button
+                    type="button"
+                    onClick={onLogout}
+                    className="rounded-2xl bg-orange-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-orange-500/20 transition hover:-translate-y-0.5 hover:bg-orange-700"
+                  >
+                    Đăng xuất
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onRequestLogin}
+                    className="rounded-2xl bg-orange-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-orange-700"
+                  >
+                    Đăng nhập
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -104,7 +208,7 @@ function Dashboard({ onLogout, onUserUpdate, onRequestLogin, user }) {
         {activeView === "account" ? (
           <AccountProfilePage user={user} onUserUpdate={onUserUpdate} />
         ) : (
-          <CustomerOrderHubPage user={user} />
+          <CustomerOrderHubPage user={user} initialTab={customerTab} />
         )}
       </section>
       {!isAdmin ? (

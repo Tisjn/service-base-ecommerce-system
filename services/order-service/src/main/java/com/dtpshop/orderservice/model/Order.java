@@ -72,11 +72,14 @@ public class Order {
     @Transient
     private String paymentUrl;
 
-    @Transient
-    private String paymentMethod;
+    @Column(name = "payment_method", length = 40)
+    private String paymentMethod = "COD";
 
-    @Transient
+    @Column(name = "payment_id")
     private Long paymentId;
+
+    @Column(name = "payment_status", length = 40)
+    private String paymentStatus = "PENDING";
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItem> items = new ArrayList<>();

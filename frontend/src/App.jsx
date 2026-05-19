@@ -1,4 +1,12 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import LoginPage from "./pages/auth/LoginPage.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import {
@@ -9,7 +17,27 @@ import OrderToast from "./pages/customer/orders/components/OrderToast";
 import { refreshAccessToken } from "./api/authApi.js";
 import * as orderApi from "./api/orderApi.js";
 
+function isAdminUser(user) {
+  return String(user?.role || user?.roles?.[0] || user?.authorities?.[0] || "")
+    .toUpperCase()
+    .includes("ADMIN");
+}
+
+function defaultPathForUser(user) {
+  return isAdminUser(user) ? "/admin/products" : "/customer/products";
+}
+
 function App() {
+  return (
+    <BrowserRouter>
+      <AppShell />
+    </BrowserRouter>
+  );
+}
+
+function AppShell() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [authToken, setAuthToken] = useState(
     localStorage.getItem("authToken") || "",
   );
@@ -20,7 +48,6 @@ function App() {
     const stored = localStorage.getItem("authUser");
     return stored ? JSON.parse(stored) : null;
   });
-  const [showLogin, setShowLogin] = useState(false);
 
   useEffect(() => {
     const isTokenExpired = (token) => {
@@ -32,7 +59,7 @@ function App() {
         const [, payload] = token.split(".");
         const decoded = JSON.parse(atob(payload));
         return Date.now() >= decoded.exp * 1000;
-      } catch (error) {
+      } catch {
         return true;
       }
     };
@@ -56,9 +83,10 @@ function App() {
           setAuthToken("");
           setRefreshToken("");
           setUser(null);
+          navigate("/login", { replace: true });
         });
     }
-  }, [authToken, refreshToken]);
+  }, [authToken, navigate, refreshToken]);
 
   const handleLogin = async (token, refresh, userData) => {
     localStorage.setItem("authToken", token);
@@ -67,7 +95,7 @@ function App() {
     setAuthToken(token);
     setRefreshToken(refresh);
     setUser(userData || null);
-    setShowLogin(false);
+    navigate(defaultPathForUser(userData), { replace: true });
   };
 
   const handleLogout = async () => {
@@ -82,14 +110,17 @@ function App() {
     setAuthToken("");
     setRefreshToken("");
     setUser(null);
+    navigate("/login", { replace: true });
   };
 
   const handleRequestLogin = () => {
-    setShowLogin(true);
+    navigate("/login");
   };
 
   const handleCloseLogin = () => {
-    setShowLogin(false);
+    navigate(user ? defaultPathForUser(user) : "/customer/orders", {
+      replace: true,
+    });
   };
 
   const handleUserUpdate = (userData) => {
@@ -98,41 +129,132 @@ function App() {
     setUser(nextUser);
   };
 
-  return showLogin ? (
-    <LoginPage onLogin={handleLogin} onCancel={handleCloseLogin} />
-  ) : (
+  return (
     <OrderNotificationProvider user={user}>
-      <Dashboard
-        onLogout={handleLogout}
-        onUserUpdate={handleUserUpdate}
-        onRequestLogin={handleRequestLogin}
-        user={user}
-      />
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            user ? (
+              <Navigate to={defaultPathForUser(user)} replace />
+            ) : (
+              <LoginPage onLogin={handleLogin} onCancel={handleCloseLogin} />
+            )
+          }
+        />
+        <Route
+          path="/"
+          element={<Navigate to={defaultPathForUser(user)} replace />}
+        />
+        <Route
+          path="/customer/products"
+          element={
+            <Dashboard
+              routeView="orders"
+              customerTab="catalog"
+              user={user}
+              onLogout={handleLogout}
+              onUserUpdate={handleUserUpdate}
+              onRequestLogin={handleRequestLogin}
+            />
+          }
+        />
+        <Route
+          path="/customer/cart"
+          element={
+            <Dashboard
+              routeView="orders"
+              customerTab="cart"
+              user={user}
+              onLogout={handleLogout}
+              onUserUpdate={handleUserUpdate}
+              onRequestLogin={handleRequestLogin}
+            />
+          }
+        />
+        <Route
+          path="/customer/orders"
+          element={
+            <Dashboard
+              routeView="orders"
+              customerTab="history"
+              user={user}
+              onLogout={handleLogout}
+              onUserUpdate={handleUserUpdate}
+              onRequestLogin={handleRequestLogin}
+            />
+          }
+        />
+        <Route
+          path="/customer/account"
+          element={
+            <Dashboard
+              routeView="account"
+              user={user}
+              onLogout={handleLogout}
+              onUserUpdate={handleUserUpdate}
+              onRequestLogin={handleRequestLogin}
+            />
+          }
+        />
+        <Route
+          path="/orders/:orderId"
+          element={
+            <Dashboard
+              routeView="orders"
+              customerTab="history"
+              user={user}
+              onLogout={handleLogout}
+              onUserUpdate={handleUserUpdate}
+              onRequestLogin={handleRequestLogin}
+            />
+          }
+        />
+        <Route
+          path="/admin"
+          element={<Navigate to="/admin/products" replace />}
+        />
+        <Route
+          path="/admin/:section"
+          element={
+            <Dashboard
+              routeView="products"
+              user={user}
+              onLogout={handleLogout}
+              onUserUpdate={handleUserUpdate}
+              onRequestLogin={handleRequestLogin}
+            />
+          }
+        />
+        <Route
+          path="*"
+          element={
+            <Navigate
+              to={user ? defaultPathForUser(user) : "/customer/orders"}
+              replace
+            />
+          }
+        />
+      </Routes>
       <AdminNotificationToast />
-      <DeepLinkHandler />
+      <DeepLinkHandler pathname={location.pathname} />
     </OrderNotificationProvider>
   );
 }
 
-function DeepLinkHandler() {
+function DeepLinkHandler({ pathname }) {
   const { openOrder } = useOrderNotifications() || {};
 
   useEffect(() => {
-    function checkPath() {
-      try {
-        const match = window.location.pathname.match(/^\/orders\/(.+)$/);
-        if (match && match[1] && typeof openOrder === "function") {
-          openOrder(decodeURIComponent(match[1]));
-        }
-      } catch {
-        // ignore
+    try {
+      const match = pathname.match(/^\/orders\/(.+)$/);
+      if (match && match[1] && typeof openOrder === "function") {
+        openOrder(decodeURIComponent(match[1]));
       }
+    } catch {
+      // ignore
     }
-
-    checkPath();
-    window.addEventListener("popstate", checkPath);
-    return () => window.removeEventListener("popstate", checkPath);
-  }, [openOrder]);
+  }, [openOrder, pathname]);
 
   return null;
 }
@@ -144,8 +266,8 @@ function AdminNotificationToast() {
   useEffect(() => {
     if (!lastNotification) return;
     setVisible(true);
-    const t = setTimeout(() => setVisible(false), 3500);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setVisible(false), 3500);
+    return () => clearTimeout(timer);
   }, [lastNotification]);
 
   if (!visible || !lastNotification) return null;
@@ -154,7 +276,7 @@ function AdminNotificationToast() {
     <OrderToast
       notification={{
         type: "success",
-        text: `Đơn hàng mới #${lastNotification.orderId} — ${new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(lastNotification.total)}`,
+        text: `Đơn hàng mới #${lastNotification.orderId} - ${new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(lastNotification.total)}`,
       }}
       onClose={() => setVisible(false)}
     />

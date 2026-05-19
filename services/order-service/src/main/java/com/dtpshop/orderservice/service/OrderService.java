@@ -122,6 +122,7 @@ public class OrderService {
             }
             pendingOrder.setPaymentId(parseLong(paymentResult.getPaymentId()));
             pendingOrder.setPaymentUrl(paymentResult.getPaymentUrl());
+            pendingOrder.setPaymentStatus(normalizePaymentStatus(paymentResult.getStatus()));
         }
 
         // Publish OrderCreated event to other services via AMQP
@@ -143,7 +144,8 @@ public class OrderService {
                     pendingOrder.getOrderCode(), pendingOrder.getStatus(),
                     pendingOrder.getSubtotal(), pendingOrder.getShippingFee(), pendingOrder.getFinalAmount(),
                     pendingOrder.getNote(), pendingOrder.getPaymentMethod(), pendingOrder.getPaymentId(),
-                    pendingOrder.getPaymentUrl(), pendingOrder.getCreatedAt(), pendingOrder.getUpdatedAt(),
+                    pendingOrder.getPaymentStatus(), pendingOrder.getPaymentUrl(),
+                    pendingOrder.getCreatedAt(), pendingOrder.getUpdatedAt(),
                     pendingOrder.getCompletedAt(), pendingOrder.getCancelledAt(),
                     itemsToProcess);
             orderWebSocketNotifier.notifyNewOrder(notifyDto);
@@ -161,17 +163,26 @@ public class OrderService {
         return order;
     }
 
+    @Transactional
     public List<Order> findOrders(Long userId) {
-        return orderRepository.findByUserId(userId);
+        List<Order> orders = orderRepository.findByUserId(userId);
+        orders.forEach(this::refreshPaymentSnapshot);
+        return orders;
     }
 
+    @Transactional
     public List<Order> findAllOrders() {
-        return orderRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"));
+        List<Order> orders = orderRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"));
+        orders.forEach(this::refreshPaymentSnapshot);
+        return orders;
     }
 
+    @Transactional
     public Order getOrder(Long orderId) {
-        return orderRepository.findById(orderId)
+        Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+        refreshPaymentSnapshot(order);
+        return order;
     }
 
     @Transactional
@@ -225,8 +236,27 @@ public class OrderService {
         Order order = getOrder(orderId);
         order.setStatus(OrderStatus.CONFIRMED);
         order.setPaymentId(parseLong(paymentId));
+        order.setPaymentStatus("PAID");
         order.updateTimestamp();
         orderRepository.save(order);
+    }
+
+    private void refreshPaymentSnapshot(Order order) {
+        if (paymentServiceClient == null || order == null || order.getId() == null) {
+            return;
+        }
+        PaymentServiceClient.PaymentSnapshot payment = paymentServiceClient.getLatestPayment(order.getId());
+        if (payment == null) {
+            return;
+        }
+        if (payment.getPaymentMethod() != null && !payment.getPaymentMethod().isBlank()) {
+            order.setPaymentMethod(normalizePaymentMethod(payment.getPaymentMethod()));
+        }
+        Long paymentId = parseLong(payment.getPaymentId());
+        if (paymentId != null) {
+            order.setPaymentId(paymentId);
+        }
+        order.setPaymentStatus(normalizePaymentStatus(payment.getStatus()));
     }
 
     private String normalizePaymentMethod(String method) {
@@ -251,6 +281,17 @@ public class OrderService {
         }
     }
 
+    private String normalizePaymentStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return "PENDING";
+        }
+        String normalized = status.trim().toUpperCase();
+        return switch (normalized) {
+            case "PAID", "FAILED", "EXPIRED", "CANCELLED", "PENDING" -> normalized;
+            default -> "PENDING";
+        };
+    }
+
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
     }
@@ -260,6 +301,10 @@ public class OrderService {
         List<ProductCommentResponse> comments = getProductComments(productId);
         boolean purchased = userId != null && orderRepository.existsPurchasedProduct(userId, productId);
         return new OrderProductDetailDto(product, comments, purchased);
+    }
+
+    public boolean hasOrdersForProduct(Long productId) {
+        return orderRepository.existsProductOrder(productId);
     }
 
     @Transactional

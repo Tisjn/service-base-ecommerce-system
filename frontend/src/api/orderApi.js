@@ -60,80 +60,62 @@ async function handleResponse(response) {
 }
 
 export async function getCart() {
-  const response = await requestWithFallback(
-    "/cart",
-    {
-      headers: getAuthHeaders(),
-      cache: "no-store",
-    },
-  );
+  const response = await requestWithFallback("/cart", {
+    headers: getAuthHeaders(),
+    cache: "no-store",
+  });
   return handleResponse(response);
 }
 
 export async function addCartItem(item) {
-  const response = await requestWithFallback(
-    "/cart/items",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...getAuthHeaders(),
-      },
-      body: JSON.stringify(item),
+  const response = await requestWithFallback("/cart/items", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeaders(),
     },
-  );
+    body: JSON.stringify(item),
+  });
   return handleResponse(response);
 }
 
 export async function updateCartItem(productId, quantity) {
-  const response = await requestWithFallback(
-    `/cart/items/${productId}`,
-    {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        ...getAuthHeaders(),
-      },
-      body: JSON.stringify({ quantity }),
+  const response = await requestWithFallback(`/cart/items/${productId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeaders(),
     },
-  );
+    body: JSON.stringify({ quantity }),
+  });
   return handleResponse(response);
 }
 
 export async function removeCartItem(productId) {
-  const response = await requestWithFallback(
-    `/cart/items/${productId}`,
-    {
-      method: "DELETE",
-      headers: getAuthHeaders(),
-    },
-  );
+  const response = await requestWithFallback(`/cart/items/${productId}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
   return handleResponse(response);
 }
 
 export async function clearCart() {
-  const response = await requestWithFallback(
-    "/cart",
-    {
-      method: "DELETE",
-      headers: getAuthHeaders(),
-    },
-  );
+  const response = await requestWithFallback("/cart", {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
   return handleResponse(response);
 }
 
 export async function notifyCartOnLogin(userId) {
-  const response = await requestWithFallback(
-    "/cart/session/login",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...getAuthHeaders(),
-      },
-      body: JSON.stringify({ userId }),
+  const response = await requestWithFallback("/cart/session/login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeaders(),
     },
-  );
+    body: JSON.stringify({ userId }),
+  });
   return handleResponse(response);
 }
 
@@ -214,6 +196,18 @@ export async function getProductDetailWithComments(productId) {
     },
   );
   return handleResponse(response);
+}
+
+export async function checkProductOrderHistory(productId) {
+  const response = await requestWithFallback(
+    `/admin/products/${productId}/orders-exist`,
+    {
+      headers: getAuthHeaders(),
+      cache: "no-store",
+    },
+  );
+  const data = await handleResponse(response);
+  return data?.hasOrders ?? false;
 }
 
 export async function addProductComment(userId, productId, commentData) {

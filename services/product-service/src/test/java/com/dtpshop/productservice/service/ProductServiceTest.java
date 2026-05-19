@@ -9,6 +9,7 @@ import com.dtpshop.productservice.model.CartItem;
 import com.dtpshop.productservice.model.Category;
 import com.dtpshop.productservice.model.Product;
 import com.dtpshop.productservice.model.ProductStatus;
+import com.dtpshop.productservice.client.OrderServiceClient;
 import com.dtpshop.productservice.repository.CategoryRepository;
 import com.dtpshop.productservice.repository.ProductRepository;
 import java.math.BigDecimal;
@@ -36,6 +37,9 @@ class ProductServiceTest {
     @Mock
     private CategoryRepository categoryRepository;
 
+    @Mock
+    private OrderServiceClient orderServiceClient;
+
     private CartService cartService;
 
     private ProductService productService;
@@ -46,7 +50,7 @@ class ProductServiceTest {
     @BeforeEach
     void setUp() {
         cartService = new TestCartService();
-        productService = new ProductService(productRepository, categoryRepository, cartService);
+        productService = new ProductService(productRepository, categoryRepository, cartService, orderServiceClient);
     }
 
     @Test
@@ -412,7 +416,23 @@ class ProductServiceTest {
 
         assertThatThrownBy(() -> productService.softDeleteProduct(1L))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessage("Cannot delete product because it is reserved or present in a cart");
+                .hasMessage("Không thể xóa sản phẩm vì sản phẩm đang được giữ hoặc có trong giỏ hàng");
+    }
+
+    @Test
+    void shouldRestoreHiddenProduct() {
+        Product existing = new Product();
+        existing.setId(2L);
+        existing.setName("Hidden Product");
+        existing.setStatus(ProductStatus.HIDDEN);
+
+        when(productRepository.findById(2L)).thenReturn(Optional.of(existing));
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Product restored = productService.restoreProduct(2L);
+
+        assertThat(restored.getStatus()).isEqualTo(ProductStatus.ACTIVE);
+        assertThat(restored.getUpdatedAt()).isNotNull();
     }
 
     @Test

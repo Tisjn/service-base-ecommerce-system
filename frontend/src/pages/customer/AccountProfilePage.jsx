@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   changePassword,
   deleteProfileAvatar,
@@ -85,12 +85,19 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
   const [avatarPreview, setAvatarPreview] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
+  const editingAddressRef = useRef(false);
   const [savingAddress, setSavingAddress] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [savingAvatar, setSavingAvatar] = useState(false);
   const [deletingAvatar, setDeletingAvatar] = useState(false);
+
+  function setAddressEditing(value) {
+    editingAddressRef.current = value;
+  }
   const [notice, setNotice] = useState(null);
-  const [editingAddress, setEditingAddress] = useState(false);
 
   const displayName = profile?.fullName || profile?.email || "Người dùng";
   const currentAvatar = avatarPreview || profile?.avatarUrl || "";
@@ -149,7 +156,7 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
           ? addressResult.value
           : [];
         setAddresses(nextAddresses);
-        if (!editingAddress) {
+        if (!editingAddressRef.current) {
           setAddressForm(toAddressForm(nextAddresses[0] || null));
         }
       }
@@ -271,7 +278,7 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
       nextAddresses.find((address) => address.id === selectedId) ||
       nextAddresses[0] ||
       null;
-    if (!editingAddress) {
+    if (!editingAddressRef.current) {
       setAddressForm(toAddressForm(selected));
     }
   }
@@ -383,6 +390,44 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
     } finally {
       setPasswordOtpSending(false);
     }
+  }
+
+  function EyeIcon() {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-5 w-5"
+      >
+        <path d="M2.25 12C3.8 7.5 7.7 4.5 12 4.5s8.2 3 9.75 7.5C20.2 16.5 16.3 19.5 12 19.5S3.8 16.5 2.25 12Z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    );
+  }
+
+  function EyeOffIcon() {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-5 w-5"
+      >
+        <path d="M3 3l18 18" />
+        <path d="M10.6 10.6A3 3 0 0 0 13.4 13.4" />
+        <path d="M6.2 6.2C4.1 7.6 2.6 9.6 2.25 12c1.55 4.5 5.45 7.5 9.75 7.5 1.6 0 3.14-.34 4.5-.98" />
+        <path d="M9.9 4.9A10.7 10.7 0 0 1 12 4.5c4.3 0 8.2 3 9.75 7.5a11.8 11.8 0 0 1-2.5 3.8" />
+      </svg>
+    );
   }
 
   async function handleSaveAvatar() {
@@ -672,21 +717,33 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
 
             <div className="grid gap-5">
               <ProfileField label="Mật khẩu hiện tại">
-                <input
-                  type="password"
-                  value={passwordForm.currentPassword}
-                  name="currentPassword"
-                  autoComplete="off"
-                  onChange={(event) =>
-                    setPasswordForm((prev) => ({
-                      ...prev,
-                      currentPassword: event.target.value,
-                    }))
-                  }
-                  onFocus={() => setEditingProfile(true)}
-                  onBlur={() => setEditingProfile(false)}
-                  className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
-                />
+                <div className="relative">
+                  <input
+                    type={showCurrentPassword ? "text" : "password"}
+                    value={passwordForm.currentPassword}
+                    name="currentPassword"
+                    autoComplete="current-password"
+                    onChange={(event) =>
+                      setPasswordForm((prev) => ({
+                        ...prev,
+                        currentPassword: event.target.value,
+                      }))
+                    }
+                    onFocus={() => setEditingProfile(true)}
+                    onBlur={() => setEditingProfile(false)}
+                    className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 pr-14 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword((prev) => !prev)}
+                    aria-label={
+                      showCurrentPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"
+                    }
+                    className="absolute inset-y-0 right-0 flex items-center justify-center px-4 text-slate-500 transition-colors hover:text-blue-600"
+                  >
+                    {showCurrentPassword ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
               </ProfileField>
               <ProfileField label="Mã OTP">
                 <input
@@ -707,36 +764,60 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
                 />
               </ProfileField>
               <ProfileField label="Mật khẩu mới">
-                <input
-                  type="password"
-                  value={passwordForm.newPassword}
-                  name="newPassword"
-                  autoComplete="off"
-                  onChange={(event) =>
-                    setPasswordForm((prev) => ({
-                      ...prev,
-                      newPassword: event.target.value,
-                    }))
-                  }
-                  onFocus={() => setEditingProfile(true)}
-                  onBlur={() => setEditingProfile(false)}
-                  className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
-                />
+                <div className="relative">
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    value={passwordForm.newPassword}
+                    name="newPassword"
+                    autoComplete="new-password"
+                    onChange={(event) =>
+                      setPasswordForm((prev) => ({
+                        ...prev,
+                        newPassword: event.target.value,
+                      }))
+                    }
+                    onFocus={() => setEditingProfile(true)}
+                    onBlur={() => setEditingProfile(false)}
+                    className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 pr-14 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((prev) => !prev)}
+                    aria-label={
+                      showNewPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"
+                    }
+                    className="absolute inset-y-0 right-0 flex items-center justify-center px-4 text-slate-500 transition-colors hover:text-blue-600"
+                  >
+                    {showNewPassword ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
               </ProfileField>
               <ProfileField label="Xác nhận mật khẩu mới">
-                <input
-                  type="password"
-                  value={passwordForm.confirmPassword}
-                  name="confirmPassword"
-                  autoComplete="off"
-                  onChange={(event) =>
-                    setPasswordForm((prev) => ({
-                      ...prev,
-                      confirmPassword: event.target.value,
-                    }))
-                  }
-                  className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
-                />
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={passwordForm.confirmPassword}
+                    name="confirmPassword"
+                    autoComplete="new-password"
+                    onChange={(event) =>
+                      setPasswordForm((prev) => ({
+                        ...prev,
+                        confirmPassword: event.target.value,
+                      }))
+                    }
+                    className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 pr-14 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    aria-label={
+                      showConfirmPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"
+                    }
+                    className="absolute inset-y-0 right-0 flex items-center justify-center px-4 text-slate-500 transition-colors hover:text-blue-600"
+                  >
+                    {showConfirmPassword ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
               </ProfileField>
             </div>
             <FormActions
@@ -834,8 +915,8 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
                     onChange={(event) =>
                       setAddressValue("recipientName", event.target.value)
                     }
-                    onFocus={() => setEditingAddress(true)}
-                    onBlur={() => setEditingAddress(false)}
+                    onFocus={() => setAddressEditing(true)}
+                    onBlur={() => setAddressEditing(false)}
                     className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
                   />
                 </ProfileField>
@@ -848,8 +929,8 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
                     onChange={(event) =>
                       setAddressValue("phone", event.target.value)
                     }
-                    onFocus={() => setEditingAddress(true)}
-                    onBlur={() => setEditingAddress(false)}
+                    onFocus={() => setAddressEditing(true)}
+                    onBlur={() => setAddressEditing(false)}
                     className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
                   />
                 </ProfileField>
@@ -862,8 +943,8 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
                     onChange={(event) =>
                       setAddressValue("label", event.target.value)
                     }
-                    onFocus={() => setEditingAddress(true)}
-                    onBlur={() => setEditingAddress(false)}
+                    onFocus={() => setAddressEditing(true)}
+                    onBlur={() => setAddressEditing(false)}
                     className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
                     placeholder="Nhà, Văn phòng..."
                   />
@@ -877,8 +958,8 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
                     onChange={(event) =>
                       setAddressValue("city", event.target.value)
                     }
-                    onFocus={() => setEditingAddress(true)}
-                    onBlur={() => setEditingAddress(false)}
+                    onFocus={() => setAddressEditing(true)}
+                    onBlur={() => setAddressEditing(false)}
                     className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
                   />
                 </ProfileField>
@@ -891,8 +972,8 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
                     onChange={(event) =>
                       setAddressValue("street", event.target.value)
                     }
-                    onFocus={() => setEditingAddress(true)}
-                    onBlur={() => setEditingAddress(false)}
+                    onFocus={() => setAddressEditing(true)}
+                    onBlur={() => setAddressEditing(false)}
                     className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
                   />
                 </ProfileField>
@@ -905,8 +986,8 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
                     onChange={(event) =>
                       setAddressValue("district", event.target.value)
                     }
-                    onFocus={() => setEditingAddress(true)}
-                    onBlur={() => setEditingAddress(false)}
+                    onFocus={() => setAddressEditing(true)}
+                    onBlur={() => setAddressEditing(false)}
                     className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
                   />
                 </ProfileField>

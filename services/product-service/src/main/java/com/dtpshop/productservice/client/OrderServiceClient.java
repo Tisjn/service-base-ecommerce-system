@@ -5,6 +5,7 @@ import com.dtpshop.productservice.model.CartItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import java.util.Map;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
@@ -71,5 +72,19 @@ public class OrderServiceClient {
         } catch (Exception ex) {
             logger.warn("Failed to sync cart clear to order-service: {}", ex.getMessage());
         }
+    }
+
+    public boolean hasProductOrders(Long productId) {
+        if (productId == null) {
+            return false;
+        }
+        String url = orderServiceUrl + "/api/admin/products/" + productId + "/orders-exist";
+        @SuppressWarnings("unchecked")
+        Map<String, Object> response = (Map<String, Object>) restTemplate.getForObject(url, Map.class);
+        if (response == null) {
+            return false;
+        }
+        Object hasOrders = response.get("hasOrders");
+        return hasOrders instanceof Boolean && (Boolean) hasOrders;
     }
 }

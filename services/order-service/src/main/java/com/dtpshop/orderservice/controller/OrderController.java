@@ -182,6 +182,13 @@ public class OrderController {
         return ResponseEntity.ok(detail);
     }
 
+    @GetMapping("/admin/products/{productId}/orders-exist")
+    public ResponseEntity<Map<String, Boolean>> checkProductOrderHistory(
+            @PathVariable("productId") Long productId) {
+        boolean ordersExist = orderService.hasOrdersForProduct(productId);
+        return ResponseEntity.ok(Map.of("hasOrders", ordersExist));
+    }
+
     @PostMapping("/orders/users/{userId}/products/{productId}/comments")
     public ResponseEntity<ProductCommentResponse> addProductComment(
             @PathVariable("userId") Long userId,
@@ -266,6 +273,7 @@ public class OrderController {
                 order.getNote(),
                 order.getPaymentMethod(),
                 order.getPaymentId(),
+                order.getPaymentStatus(),
                 order.getPaymentUrl(),
                 order.getCreatedAt(),
                 order.getUpdatedAt(),

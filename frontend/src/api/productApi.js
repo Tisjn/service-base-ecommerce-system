@@ -164,6 +164,14 @@ export async function deleteProduct(productId) {
   return handleResponse(response);
 }
 
+export async function restoreProduct(productId) {
+  const response = await requestWithFallback(`/products/${productId}/restore`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
 export async function getProductDetailWithComments(productId) {
   const response = await requestWithFallback(
     `/admin/products/${productId}/details-with-comments`,
@@ -185,5 +193,6 @@ export default {
   createProduct,
   updateProduct,
   deleteProduct,
+  restoreProduct,
   getProductDetailWithComments,
 };

@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminDevelopmentPage from "../AdminDevelopmentPage";
 import { ADMIN_SECTIONS } from "../adminSections";
+import AdminCustomersPage from "../customers/AdminCustomersPage";
 import AdminDashboardPage from "../dashboard/AdminDashboardPage";
+import AdminOrdersPage from "../orders/AdminOrdersPage";
+import AdminSettingsPage from "../settings/AdminSettingsPage";
 import AdminSupportPage from "../support/AdminSupportPage";
+import AdminAiChatWidget from "../../../components/admin/AdminAiChatWidget";
 import AdminTopbar from "../../../components/admin/AdminTopbar";
+import AdminProductCrudPage from "./AdminProductCrudPage";
+import ProductDetailModal from "./ProductDetailModal";
 import ProductImageUpload from "../../../components/ProductImageUpload";
 import { useOrderNotifications } from "../../../context/OrderNotificationContext";
 import orderApi from "../../../api/orderApi";
@@ -15,6 +21,7 @@ import {
   getCategories,
   getProduct,
   getProducts,
+  restoreProduct,
   updateCategory,
   updateProduct,
 } from "../../../api/productApi";
@@ -25,6 +32,8 @@ const currencyFormatter = new Intl.NumberFormat("vi-VN", {
   currency: "VND",
   maximumFractionDigits: 0,
 });
+
+const PRODUCT_TABLE_PAGE_SIZE = 10;
 
 const initialFormState = {
   name: "",
@@ -47,12 +56,18 @@ const statusOptions = [
   { value: "HIDDEN", label: "Đang ẩn" },
 ];
 
-export default function ProductAdminPage({ user, onLogout, onNavigate }) {
+export default function ProductAdminPage({
+  user,
+  initialSection = "products",
+  onLogout,
+  onNavigate,
+  onUserUpdate,
+}) {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [pagination, setPagination] = useState({
     page: 0,
-    size: 20,
+    size: PRODUCT_TABLE_PAGE_SIZE,
     totalPages: 1,
     totalElements: 0,
   });
@@ -73,13 +88,17 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
   const [detailProductError, setDetailProductError] = useState("");
   const [detailProductData, setDetailProductData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMoreProducts, setIsLoadingMoreProducts] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isCategorySaving, setIsCategorySaving] = useState(false);
   const [notification, setNotification] = useState(null);
-  const [activeAdminSection, setActiveAdminSection] = useState("dashboard");
+  const [activeAdminSection, setActiveAdminSection] = useState(initialSection);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [adminOrders, setAdminOrders] = useState([]);
   const [adminOrdersLoading, setAdminOrdersLoading] = useState(false);
   const [adminOrdersError, setAdminOrdersError] = useState("");
+  const [orderSortDirection, setOrderSortDirection] = useState("desc");
+  const [orderFilterDate, setOrderFilterDate] = useState("");
   const [selectedAdminOrderId, setSelectedAdminOrderId] = useState(null);
   const [selectedAdminOrder, setSelectedAdminOrder] = useState(null);
   const [selectedAdminOrderComments, setSelectedAdminOrderComments] = useState(
@@ -93,6 +112,10 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
     openedOrderId: null,
     closeOrder: () => {},
   };
+
+  useEffect(() => {
+    setActiveAdminSection(initialSection || "products");
+  }, [initialSection]);
 
   const stats = useMemo(() => {
     const outOfStock = products.filter(
@@ -121,8 +144,13 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
   }, []);
 
   const loadProducts = useCallback(
-    async (page = 0) => {
-      setIsLoading(true);
+    async (page = 0, options = {}) => {
+      const append = Boolean(options.append && page > 0);
+      if (append) {
+        setIsLoadingMoreProducts(true);
+      } else {
+        setIsLoading(true);
+      }
       try {
         const response = await getProducts({
           page,
@@ -134,7 +162,20 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
           direction: "desc",
         });
 
-        setProducts(response.content || []);
+        const nextProducts = response.content || [];
+        setProducts((current) => {
+          if (!append) return nextProducts;
+          const seen = new Set(current.map((product) => String(product.id)));
+          const merged = [...current];
+          nextProducts.forEach((product) => {
+            const key = String(product.id);
+            if (!seen.has(key)) {
+              seen.add(key);
+              merged.push(product);
+            }
+          });
+          return merged;
+        });
         setPagination((prev) => ({
           ...prev,
           page: response.number || page,
@@ -144,7 +185,11 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
       } catch (error) {
         showNotification("error", error.message || "Không tải được sản phẩm.");
       } finally {
-        setIsLoading(false);
+        if (append) {
+          setIsLoadingMoreProducts(false);
+        } else {
+          setIsLoading(false);
+        }
       }
     },
     [filter.categoryId, filter.search, filter.status, pagination.size],
@@ -163,6 +208,40 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
       loadAdminOrders();
     }
   }, [activeAdminSection]);
+
+  const filteredAdminOrders = useMemo(() => {
+    const sorted = [...adminOrders].sort((a, b) => {
+      const dateA = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return orderSortDirection === "asc" ? dateA - dateB : dateB - dateA;
+    });
+
+    if (!orderFilterDate) {
+      return sorted;
+    }
+
+    return sorted.filter((order) => {
+      const orderDate = order?.createdAt
+        ? new Date(order.createdAt).toISOString().slice(0, 10)
+        : "";
+      return orderDate === orderFilterDate;
+    });
+  }, [adminOrders, orderSortDirection, orderFilterDate]);
+
+  function toggleOrderSortDirection() {
+    setOrderSortDirection((prev) => (prev === "desc" ? "asc" : "desc"));
+  }
+
+  function clearOrderFilterDate() {
+    setOrderFilterDate("");
+  }
+
+  const hasMoreProducts = pagination.page + 1 < pagination.totalPages;
+
+  function loadMoreProducts() {
+    if (isLoading || isLoadingMoreProducts || !hasMoreProducts) return;
+    loadProducts(pagination.page + 1, { append: true });
+  }
 
   useEffect(() => {
     if (!selectedAdminOrderId) return undefined;
@@ -367,7 +446,7 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
       if (selectedProduct?.id) {
         await updateProduct(selectedProduct.id, payload);
         showNotification("success", "Đã cập nhật sản phẩm.");
-        await loadProducts(pagination.page);
+        await loadProducts(0);
       } else {
         await createProduct(payload);
         showNotification("success", "Đã thêm sản phẩm mới.");
@@ -382,14 +461,31 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
   }
 
   async function handleDeleteProduct(productId) {
-    if (!window.confirm("Ẩn sản phẩm này khỏi danh sách bán hàng?")) return;
+    if (
+      !window.confirm(
+        "Ẩn sản phẩm này khỏi danh sách bán hàng? Chỉ sản phẩm chưa phát sinh đơn hàng mới có thể bị ẩn.",
+      )
+    )
+      return;
 
     try {
       await deleteProduct(productId);
       showNotification("success", "Đã ẩn sản phẩm.");
-      await loadProducts(pagination.page);
+      await loadProducts(0);
     } catch (error) {
       showNotification("error", error.message || "Không ẩn được sản phẩm.");
+    }
+  }
+
+  async function handleRestoreProduct(productId) {
+    if (!window.confirm("Bỏ ẩn sản phẩm này?")) return;
+
+    try {
+      await restoreProduct(productId);
+      showNotification("success", "Đã bỏ ẩn sản phẩm.");
+      await loadProducts(0);
+    } catch (error) {
+      showNotification("error", error.message || "Không bỏ ẩn được sản phẩm.");
     }
   }
 
@@ -400,10 +496,11 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
     setDetailProductData(null);
 
     try {
-      const [productResult, detailWithCommentsResult] =
+      const [productResult, detailWithCommentsResult, ordersExistResult] =
         await Promise.allSettled([
           getProduct(product.id),
           orderApi.getProductDetailWithComments(product.id),
+          orderApi.checkProductOrderHistory(product.id),
         ]);
 
       const productData =
@@ -411,6 +508,10 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
       const detailWithComments =
         detailWithCommentsResult.status === "fulfilled"
           ? detailWithCommentsResult.value
+          : null;
+      const hasOrders =
+        ordersExistResult.status === "fulfilled"
+          ? ordersExistResult.value
           : null;
 
       const detailPayload = {
@@ -427,6 +528,7 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
               ratingCount5Star: detailWithComments.ratingCount5Star,
             }
           : null,
+        hasOrders,
       };
 
       setDetailProductData(detailPayload);
@@ -509,10 +611,13 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
 
   return (
     <div className="min-h-screen bg-[#faf8ff] text-[#191b23] [font-family:Inter,system-ui,sans-serif]">
-      <AdminSidebar2
+      <AdminSidebarToggle
         activeSection={activeAdminSection}
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={() => setSidebarCollapsed((prev) => !prev)}
         onSectionChange={(section) => {
           setActiveAdminSection(section);
+          onNavigate?.(section);
           closeProductForm();
           closeCategoryForm();
           closeProductDetail();
@@ -521,7 +626,12 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
         onNavigate={onNavigate}
       />
 
-      <main key={activeAdminSection} className="min-h-screen lg:ml-64">
+      <main
+        key={activeAdminSection}
+        className={`min-h-screen transition-[margin] duration-200 ${
+          sidebarCollapsed ? "lg:ml-20" : "lg:ml-64"
+        }`}
+      >
         <AdminTopbar
           user={user}
           onLogout={onLogout}
@@ -534,6 +644,31 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
         {activeAdminSection === "dashboard" ? (
           <AdminDashboardPage onSectionChange={setActiveAdminSection} />
         ) : activeAdminSection === "products" ? (
+          <AdminProductCrudPage
+            products={products}
+            categories={categories}
+            pagination={pagination}
+            filterDraft={filterDraft}
+            setFilterDraft={setFilterDraft}
+            stats={stats}
+            isLoading={isLoading}
+            isLoadingMore={isLoadingMoreProducts}
+            hasMoreProducts={hasMoreProducts}
+            statusOptions={statusOptions}
+            onApplyFilters={applyFilters}
+            onResetFilters={resetFilters}
+            onLoadProducts={loadProducts}
+            onLoadMoreProducts={loadMoreProducts}
+            onCreateCategory={openCreateCategoryForm}
+            onCreateProduct={openCreateProductForm}
+            onViewProduct={openProductDetail}
+            onEditProduct={openEditProductForm}
+            onDeleteProduct={handleDeleteProduct}
+            onRestoreProduct={handleRestoreProduct}
+            onEditCategory={openEditCategoryForm}
+            onDeleteCategory={handleDeleteCategory}
+          />
+        ) : false ? (
           <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-10">
             <div className="mb-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div>
@@ -557,7 +692,7 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
                 <button
                   type="button"
                   onClick={openCreateProductForm}
-                  className="flex items-center gap-2 rounded-xl bg-gradient-to-br from-[#9d4300] to-[#fd761a] px-6 py-3 font-semibold text-white shadow-xl shadow-orange-500/10 transition hover:scale-105 active:scale-95"
+                  className="flex items-center gap-2 rounded-xl bg-[#ff4500] px-6 py-3 font-semibold text-white shadow-xl shadow-orange-500/10 transition hover:scale-105 hover:bg-[#e63e00] active:scale-95"
                 >
                   <span className="material-symbols-outlined">add</span>
                   <span>Thêm sản phẩm mới</span>
@@ -602,6 +737,28 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
             </div>
 
             <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-[#c3c6d7]/10 bg-[#f3f3fe] p-2">
+              <label className="relative min-w-64 flex-1">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#737686]">
+                  search
+                </span>
+                <input
+                  type="text"
+                  value={filterDraft.search}
+                  onChange={(event) =>
+                    setFilterDraft((prev) => ({
+                      ...prev,
+                      search: event.target.value,
+                    }))
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      applyFilters();
+                    }
+                  }}
+                  placeholder="Tìm kiếm theo tên sản phẩm..."
+                  className="w-full rounded-lg border border-[#c3c6d7]/30 bg-white py-2 pl-10 pr-4 text-sm font-medium text-[#191b23] outline-none transition focus:border-[#004ac6] focus:ring-2 focus:ring-[#004ac6]/20"
+                />
+              </label>
               <CategoryFilterButton
                 active={!filterDraft.categoryId}
                 label="Tất cả sản phẩm"
@@ -687,6 +844,7 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
                           onView={() => openProductDetail(product)}
                           onEdit={() => openEditProductForm(product)}
                           onDelete={() => handleDeleteProduct(product.id)}
+                          onRestore={() => handleRestoreProduct(product.id)}
                         />
                       ))
                     )}
@@ -753,6 +911,26 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
             />
           </div>
         ) : activeAdminSection === "orders" ? (
+          <AdminOrdersPage
+            orders={adminOrders}
+            filteredOrders={filteredAdminOrders}
+            loading={adminOrdersLoading}
+            error={adminOrdersError}
+            sortDirection={orderSortDirection}
+            filterDate={orderFilterDate}
+            selectedOrder={selectedAdminOrderId ? selectedAdminOrder : null}
+            comments={selectedAdminOrderComments}
+            detailLoading={selectedAdminOrderLoading}
+            detailError={selectedAdminOrderError}
+            updating={orderStatusUpdating}
+            onToggleSort={toggleOrderSortDirection}
+            onFilterDateChange={setOrderFilterDate}
+            onClearFilterDate={clearOrderFilterDate}
+            onOpenOrder={openAdminOrderDetail}
+            onCloseDetail={closeAdminOrderDetail}
+            onStatusChange={handleAdminOrderStatusUpdate}
+          />
+        ) : false ? (
           <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-10">
             <div className="mb-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div>
@@ -771,9 +949,42 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
                 <p className="mt-2 text-3xl font-extrabold text-[#004ac6]">
                   {adminOrders.length}
                 </p>
-                <p className="mt-1 text-sm text-[#434655]">
-                  Cập nhật mới nhất trước
-                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-[#434655]">
+                  <span>Sắp xếp theo ngày:</span>
+                  <button
+                    type="button"
+                    onClick={toggleOrderSortDirection}
+                    className="rounded-full border border-[#c3c6d7]/50 bg-[#f3f3fe] px-3 py-1 text-sm font-semibold text-[#004ac6] transition hover:bg-[#e7e7f3]"
+                  >
+                    {orderSortDirection === "desc"
+                      ? "Mới nhất trước"
+                      : "Cũ nhất trước"}
+                  </button>
+                  <label className="inline-flex items-center gap-2 rounded-full border border-[#c3c6d7]/50 bg-white px-3 py-1 text-sm text-[#434655] shadow-sm">
+                    <span className="material-symbols-outlined text-base text-[#004ac6]">
+                      calendar_month
+                    </span>
+                    <span>Chọn ngày:</span>
+                    <input
+                      type="date"
+                      value={orderFilterDate}
+                      onChange={(event) =>
+                        setOrderFilterDate(event.target.value)
+                      }
+                      onKeyDown={(event) => event.preventDefault()}
+                      className="w-36 cursor-pointer rounded-lg border border-[#c3c6d7]/60 bg-white px-2 py-1 text-sm text-[#191b23] outline-none transition focus:border-[#004ac6] focus:ring-2 focus:ring-[#004ac6]/20"
+                    />
+                  </label>
+                  {orderFilterDate && (
+                    <button
+                      type="button"
+                      onClick={clearOrderFilterDate}
+                      className="rounded-full border border-[#c3c6d7]/50 bg-[#f3f3fe] px-3 py-1 text-sm font-semibold text-[#004ac6] transition hover:bg-[#e7e7f3]"
+                    >
+                      Xóa filter
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -795,10 +1006,10 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
                       <EmptyRow colSpan={6} text="Đang tải đơn hàng..." />
                     ) : adminOrdersError ? (
                       <EmptyRow colSpan={6} text={adminOrdersError} />
-                    ) : adminOrders.length === 0 ? (
-                      <EmptyRow colSpan={6} text="Không có đơn hàng mới." />
+                    ) : filteredAdminOrders.length === 0 ? (
+                      <EmptyRow colSpan={6} text="Không có đơn hàng phù hợp." />
                     ) : (
-                      adminOrders.map((order) => (
+                      filteredAdminOrders.map((order) => (
                         <AdminOrderRow
                           key={order.orderId || order.id}
                           order={order}
@@ -825,6 +1036,10 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
           </div>
         ) : activeAdminSection === "support" ? (
           <AdminSupportPage user={user} />
+        ) : activeAdminSection === "customers" ? (
+          <AdminCustomersPage currentUser={user} />
+        ) : activeAdminSection === "settings" ? (
+          <AdminSettingsPage user={user} onUserUpdate={onUserUpdate} />
         ) : (
           <AdminDevelopmentPage section={ADMIN_SECTIONS[activeAdminSection]} />
         )}
@@ -841,6 +1056,8 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
           chat_bubble
         </span>
       </button>
+
+      <AdminAiChatWidget user={user} />
 
       {notification && (
         <Toast
@@ -873,11 +1090,8 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
         />
       )}
       {selectedDetailProduct && (
-        <ProductDetailAdminModal
-          product={selectedDetailProduct}
-          detailData={detailProductData}
-          loading={detailProductLoading}
-          error={detailProductError}
+        <ProductDetailModal
+          productId={selectedDetailProduct.id}
           onClose={closeProductDetail}
         />
       )}
@@ -951,6 +1165,120 @@ function AdminNotificationBell() {
         </div>
       )}
     </div>
+  );
+}
+
+function AdminSidebarToggle({
+  activeSection,
+  collapsed,
+  onToggleCollapsed,
+  onSectionChange,
+}) {
+  const primaryItems = [
+    { id: "dashboard", icon: "dashboard", label: "Bảng điều khiển" },
+    { id: "products", icon: "inventory_2", label: "Sản phẩm" },
+    { id: "orders", icon: "shopping_cart", label: "Đơn hàng" },
+    { id: "customers", icon: "group", label: "Khách hàng" },
+    { id: "analytics", icon: "analytics", label: "Phân tích" },
+  ];
+  const secondaryItems = [
+    { id: "support", icon: "help", label: "Hỗ trợ" },
+    { id: "settings", icon: "settings", label: "Cài đặt" },
+  ];
+
+  return (
+    <aside
+      className={`fixed left-0 top-0 z-50 hidden h-screen flex-col bg-[#f3f3fe] py-6 transition-[width,padding] duration-200 lg:flex ${
+        collapsed ? "w-20 px-3" : "w-64 px-4"
+      }`}
+    >
+      <div
+        className={`mb-10 flex items-start gap-3 ${
+          collapsed ? "justify-center px-0" : "justify-between px-4"
+        }`}
+      >
+        {!collapsed ? (
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-extrabold text-blue-700 [font-family:Manrope,system-ui,sans-serif]">
+              DTPShop Admin
+            </h1>
+            <p className="text-xs font-medium text-[#191b23]/60">
+              Quản lý cửa hàng của bạn
+            </p>
+          </div>
+        ) : null}
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#004ac6] shadow-sm transition hover:bg-[#ededf9]"
+          aria-label={collapsed ? "Mở menu" : "Thu gọn menu"}
+          title={collapsed ? "Mở menu" : "Thu gọn menu"}
+        >
+          <span className="material-symbols-outlined">
+            {collapsed ? "menu_open" : "menu"}
+          </span>
+        </button>
+      </div>
+
+      <nav className="flex-1 space-y-2">
+        {primaryItems.map((item) => (
+          <CollapsedSideNavItem
+            key={item.id}
+            icon={item.icon}
+            label={item.label}
+            collapsed={collapsed}
+            active={activeSection === item.id}
+            filled={activeSection === item.id && item.id === "products"}
+            onClick={() => onSectionChange(item.id)}
+          />
+        ))}
+      </nav>
+
+      <div className="mt-auto space-y-2 pt-6">
+        {secondaryItems.map((item) => (
+          <CollapsedSideNavItem
+            key={item.id}
+            icon={item.icon}
+            label={item.label}
+            collapsed={collapsed}
+            active={activeSection === item.id}
+            onClick={() => onSectionChange(item.id)}
+          />
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function CollapsedSideNavItem({
+  icon,
+  label,
+  active = false,
+  filled = false,
+  collapsed = false,
+  onClick,
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={collapsed ? label : undefined}
+      className={`flex w-full items-center rounded-lg py-3 text-left text-sm transition-all duration-150 ${
+        collapsed ? "justify-center px-2" : "gap-3 px-4"
+      } ${
+        active
+          ? "bg-[#e1e2ed] font-bold text-blue-700"
+          : "font-medium text-[#191b23] hover:bg-[#ededf9]"
+      }`}
+    >
+      <span
+        className="material-symbols-outlined"
+        style={{ fontVariationSettings: filled ? "'FILL' 1" : "'FILL' 0" }}
+      >
+        {icon}
+      </span>
+      {!collapsed ? <span className="truncate">{label}</span> : null}
+    </button>
   );
 }
 
@@ -1127,8 +1455,9 @@ function TableHead({ children, align = "left" }) {
   );
 }
 
-function ProductRow({ product, onView, onEdit, onDelete }) {
+function ProductRow({ product, onView, onEdit, onDelete, onRestore }) {
   const stock = Number(product.stockQuantity || 0);
+  const isHidden = product.status === "HIDDEN";
   const stockPercent = Math.max(0, Math.min(100, stock));
   const lowStock = stock > 0 && stock <= 12;
   const outOfStock = stock <= 0;
@@ -1214,13 +1543,25 @@ function ProductRow({ product, onView, onEdit, onDelete }) {
           >
             <span className="material-symbols-outlined">edit</span>
           </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            className="rounded-lg p-2 text-[#ba1a1a] transition-colors hover:bg-[#ba1a1a]/5"
-          >
-            <span className="material-symbols-outlined">delete</span>
-          </button>
+          {isHidden ? (
+            <button
+              type="button"
+              onClick={onRestore}
+              className="rounded-lg p-2 text-[#006242] transition-colors hover:bg-[#006242]/10"
+              title="Bỏ ẩn"
+            >
+              <span className="material-symbols-outlined">undo</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="rounded-lg p-2 text-[#ba1a1a] transition-colors hover:bg-[#ba1a1a]/5"
+              title="Ẩn sản phẩm"
+            >
+              <span className="material-symbols-outlined">delete</span>
+            </button>
+          )}
         </div>
       </td>
     </tr>
@@ -1778,6 +2119,15 @@ function ProductDetailAdminModal({
     ? detailData.comments
     : [];
   const ratingStats = detailData?.ratingStats;
+  const hasOrders = detailData?.hasOrders;
+  const orderHistoryLabel =
+    hasOrders === true ? "Có" : hasOrders === false ? "Chưa" : "Không rõ";
+  const orderHistoryTextClass =
+    hasOrders === true
+      ? "text-emerald-700"
+      : hasOrders === false
+        ? "text-slate-950"
+        : "text-slate-500";
   const images = [
     productData.imageUrl,
     ...(Array.isArray(productData.descriptionImageUrls)
@@ -1902,6 +2252,12 @@ function ProductDetailAdminModal({
                 <span>Tồn kho</span>
                 <span className="font-semibold text-slate-950">
                   {productData.stockQuantity ?? 0}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span>Đã phát sinh đơn</span>
+                <span className={`font-semibold ${orderHistoryTextClass}`}>
+                  {orderHistoryLabel}
                 </span>
               </div>
               <div className="flex justify-between gap-4">

@@ -51,7 +51,7 @@ function buildUserHeaders(accessToken) {
 function shouldFallbackToGateway(error) {
   return Boolean(
     gatewayUrl &&
-      (error?.code === "ERR_NETWORK" || error?.code === "ECONNABORTED"),
+    (error?.code === "ERR_NETWORK" || error?.code === "ECONNABORTED"),
   );
 }
 
@@ -95,7 +95,12 @@ export function getUserAddresses(accessToken) {
 }
 
 export function createUserAddress(accessToken, addressData) {
-  return requestWithFallback("post", "/users/me/addresses", accessToken, addressData);
+  return requestWithFallback(
+    "post",
+    "/users/me/addresses",
+    accessToken,
+    addressData,
+  );
 }
 
 export function updateUserAddress(accessToken, addressId, addressData) {
@@ -113,4 +118,30 @@ export function deleteUserAddress(accessToken, addressId) {
     `/users/me/addresses/${addressId}`,
     accessToken,
   );
+}
+
+// Admin functions (require admin credentials)
+export function listUsers(status) {
+  return requestWithFallback(
+    "get",
+    `/users${status ? `?status=${status}` : ""}`,
+  );
+}
+
+export function getUserById(userId) {
+  return requestWithFallback("get", `/users/${userId}`);
+}
+
+export function updateUserById(userId, data) {
+  return requestWithFallback("patch", `/users/${userId}`, undefined, data);
+}
+
+export function updateUserStatusById(userId, status) {
+  return requestWithFallback("patch", `/users/${userId}/status`, undefined, {
+    status,
+  });
+}
+
+export function deleteUserById(userId) {
+  return requestWithFallback("delete", `/users/${userId}`);
 }

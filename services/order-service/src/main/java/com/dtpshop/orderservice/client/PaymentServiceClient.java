@@ -2,6 +2,7 @@ package com.dtpshop.orderservice.client;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,6 +69,30 @@ public class PaymentServiceClient {
         return new PaymentResult(false, null, null, null);
     }
 
+    public PaymentSnapshot getLatestPayment(Long orderId) {
+        String url = paymentServiceUrl + "/payments?orderId=" + orderId;
+        try {
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(url, HttpMethod.GET, null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {
+                    });
+            if (response.getStatusCode().is2xxSuccessful()
+                    && response.getBody() != null
+                    && !response.getBody().isEmpty()) {
+                Map<String, Object> payment = response.getBody().get(0);
+                Object paymentId = firstPresent(payment, "id", "paymentId");
+                Object method = payment.get("paymentMethod");
+                Object status = payment.get("status");
+                return new PaymentSnapshot(
+                        paymentId == null ? null : paymentId.toString(),
+                        method == null ? null : method.toString(),
+                        status == null ? null : status.toString());
+            }
+        } catch (Exception ex) {
+            logger.warn("Cannot fetch payment status for orderId={}: {}", orderId, ex.getMessage());
+        }
+        return null;
+    }
+
     private Object firstPresent(Map<String, Object> body, String... keys) {
         for (String key : keys) {
             Object value = body.get(key);
@@ -109,6 +134,30 @@ public class PaymentServiceClient {
 
         public String getPaymentUrl() {
             return paymentUrl;
+        }
+
+        public String getStatus() {
+            return status;
+        }
+    }
+
+    public static class PaymentSnapshot {
+        private final String paymentId;
+        private final String paymentMethod;
+        private final String status;
+
+        public PaymentSnapshot(String paymentId, String paymentMethod, String status) {
+            this.paymentId = paymentId;
+            this.paymentMethod = paymentMethod;
+            this.status = status;
+        }
+
+        public String getPaymentId() {
+            return paymentId;
+        }
+
+        public String getPaymentMethod() {
+            return paymentMethod;
         }
 
         public String getStatus() {

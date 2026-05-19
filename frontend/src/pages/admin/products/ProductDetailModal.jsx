@@ -38,6 +38,7 @@ function RatingBar({ count, total, percentage }) {
 
 export default function ProductDetailModal({ productId, onClose }) {
   const [detail, setDetail] = useState(null);
+  const [hasOrders, setHasOrders] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -48,8 +49,12 @@ export default function ProductDetailModal({ productId, onClose }) {
       setLoading(true);
       setError(null);
       try {
-        const data = await orderApi.getProductDetailWithComments(productId);
-        setDetail(data);
+        const [detailData, orderExists] = await Promise.all([
+          orderApi.getProductDetailWithComments(productId),
+          orderApi.checkProductOrderHistory(productId),
+        ]);
+        setDetail(detailData);
+        setHasOrders(orderExists);
       } catch (err) {
         setError(err.message || "Không thể tải chi tiết sản phẩm");
         console.error("Error loading product detail:", err);
@@ -167,10 +172,22 @@ export default function ProductDetailModal({ productId, onClose }) {
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase text-slate-500">
-                    Danh mục
+                    Đã phát sinh đơn
                   </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-950">
-                    {detail.categoryName || "N/A"}
+                  <p
+                    className={`mt-1 text-sm font-semibold ${
+                      hasOrders === true
+                        ? "text-emerald-700"
+                        : hasOrders === false
+                          ? "text-slate-950"
+                          : "text-slate-500"
+                    }`}
+                  >
+                    {hasOrders === true
+                      ? "Có"
+                      : hasOrders === false
+                        ? "Chưa"
+                        : "Không rõ"}
                   </p>
                 </div>
                 <div>

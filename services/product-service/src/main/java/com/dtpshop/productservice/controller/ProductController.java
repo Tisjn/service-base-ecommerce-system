@@ -120,6 +120,11 @@ public class ProductController {
         return ResponseEntity.ok(productService.softDeleteProduct(id));
     }
 
+    @PatchMapping("/products/{id}/restore")
+    public ResponseEntity<Product> restoreProduct(@PathVariable Long id) {
+        return ResponseEntity.ok(productService.restoreProduct(id));
+    }
+
     @PatchMapping("/products/{id}/stock")
     public ResponseEntity<Product> updateStock(@PathVariable Long id,
             @Valid @RequestBody StockUpdateRequest request) {

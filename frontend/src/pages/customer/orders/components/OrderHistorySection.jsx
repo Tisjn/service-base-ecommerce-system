@@ -42,6 +42,37 @@ function OrderTimeline({ status }) {
   );
 }
 
+function getPaymentMethodLabel(method) {
+  const normalized = String(method || "COD").toUpperCase();
+  return normalized === "MOMO" ? "MOMO" : "COD";
+}
+
+function getPaymentStatusLabel(status, method) {
+  const normalizedStatus = String(status || "").toUpperCase();
+  const normalizedMethod = String(method || "").toUpperCase();
+  if (normalizedStatus === "PAID") {
+    return "Đã thanh toán";
+  }
+  if (normalizedStatus === "FAILED") {
+    return "Thanh toán lỗi";
+  }
+  if (normalizedMethod === "COD") {
+    return "Thanh toán khi nhận hàng";
+  }
+  return "Chờ thanh toán";
+}
+
+function getPaymentStatusClass(status) {
+  const normalized = String(status || "").toUpperCase();
+  if (normalized === "PAID") {
+    return "bg-emerald-50 text-emerald-700";
+  }
+  if (normalized === "FAILED") {
+    return "bg-rose-50 text-rose-700";
+  }
+  return "bg-amber-50 text-amber-700";
+}
+
 export default function OrderHistorySection({
   userId,
   products,
@@ -256,7 +287,15 @@ export default function OrderHistorySection({
                             {getStatusLabel(order.status)}
                           </span>
                           <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                            {order.paymentMethod || "COD"}
+                            {getPaymentMethodLabel(order.paymentMethod)}
+                          </span>
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getPaymentStatusClass(order.paymentStatus)}`}
+                          >
+                            {getPaymentStatusLabel(
+                              order.paymentStatus,
+                              order.paymentMethod,
+                            )}
                           </span>
                         </div>
 
@@ -293,6 +332,15 @@ export default function OrderHistorySection({
                         </p>
                         <p className="mt-2 text-lg font-semibold text-slate-950">
                           {getStatusLabel(order.status)}
+                        </p>
+                        <p
+                          className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getPaymentStatusClass(order.paymentStatus)}`}
+                        >
+                          {getPaymentMethodLabel(order.paymentMethod)} -{" "}
+                          {getPaymentStatusLabel(
+                            order.paymentStatus,
+                            order.paymentMethod,
+                          )}
                         </p>
                         <div className="mt-4">
                           <OrderTimeline status={order.status} />
