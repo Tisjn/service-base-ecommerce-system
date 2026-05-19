@@ -1,0 +1,25 @@
+services:
+  ai-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-service
+    ports:
+      - "3009:3009"
+    environment:
+      - RDS_HOST=${RDS_HOST}
+      - RDS_PORT=${RDS_PORT:-3306}
+      - RDS_DB=${RDS_DB:-ecommerce_data}
+      - RDS_USER=${RDS_USER}
+      - RDS_PASSWORD=${RDS_PASSWORD}
+      - RDS_SSL=${RDS_SSL:-false}
+      - SERVER_PORT=3009
+      - GOOGLE_AI_API_KEY=${GOOGLE_AI_API_KEY}
+      - GOOGLE_AI_MODEL=${GOOGLE_AI_MODEL:-gemini-2.5-flash}
+    networks:
+      - app-network
+    restart: on-failure
+
+networks:
+  app-network:
+    driver: bridge

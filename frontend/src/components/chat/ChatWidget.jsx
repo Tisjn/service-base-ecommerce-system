@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { askAiAssistant } from "../../api/aiApi";
 import {
   createChatRoom,
   createChatSocket,
@@ -17,6 +18,18 @@ function normalizeUserId(user) {
 
 export default function ChatWidget({ user, onRequestLogin }) {
   const [open, setOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiMessages, setAiMessages] = useState([
+    {
+      id: "ai-welcome",
+      role: "assistant",
+      message: "Xin chao, minh la tro ly AI cua DTPShop. Ban can tim san pham, chinh sach hay kiem tra don hang nao?",
+      timestamp: Date.now(),
+    },
+  ]);
+  const [aiDraft, setAiDraft] = useState("");
+  const [aiStatus, setAiStatus] = useState("idle");
+  const [aiError, setAiError] = useState("");
   const [room, setRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
@@ -41,7 +54,7 @@ export default function ChatWidget({ user, onRequestLogin }) {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages.length, open]);
+  }, [messages.length, aiMessages.length, open, aiOpen]);
 
   useEffect(() => {
     if (!open || !canChat) {
@@ -106,7 +119,17 @@ export default function ChatWidget({ user, onRequestLogin }) {
       onRequestLogin?.();
       return;
     }
+    setAiOpen(false);
     setOpen(true);
+  }
+
+  function handleAiOpen() {
+    if (!canChat) {
+      onRequestLogin?.();
+      return;
+    }
+    setOpen(false);
+    setAiOpen(true);
   }
 
   function sendText(event) {
@@ -142,6 +165,41 @@ export default function ChatWidget({ user, onRequestLogin }) {
     }
   }
 
+  async function sendAiText(event) {
+    event.preventDefault();
+    const text = aiDraft.trim();
+    if (!text || aiStatus === "thinking") return;
+
+    const userMessage = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      message: text,
+      timestamp: Date.now(),
+    };
+
+    setAiMessages((prev) => [...prev, userMessage]);
+    setAiDraft("");
+    setAiError("");
+    setAiStatus("thinking");
+
+    try {
+      const data = await askAiAssistant(text);
+      setAiMessages((prev) => [
+        ...prev,
+        {
+          id: `ai-${Date.now()}`,
+          role: "assistant",
+          message: data.answer || "Minh chua co cau tra loi phu hop luc nay.",
+          timestamp: Date.now(),
+        },
+      ]);
+    } catch (err) {
+      setAiError(err?.response?.data?.message || err.message || "Khong goi duoc tro ly AI");
+    } finally {
+      setAiStatus("idle");
+    }
+  }
+
   const title = useMemo(() => {
     if (!canChat) return "Can dang nhap de chat";
     if (isClosed) return "Cuoc chat da dong";
@@ -151,15 +209,117 @@ export default function ChatWidget({ user, onRequestLogin }) {
 
   return (
     <>
-      {!open && (
-        <button
-          type="button"
-          onClick={handleOpen}
-          className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-sky-600 text-white shadow-2xl shadow-sky-700/20 transition hover:-translate-y-0.5 hover:bg-sky-700"
-          aria-label="Mo chat ho tro"
-        >
-          <span className="material-symbols-outlined">support_agent</span>
-        </button>
+      {!open && !aiOpen && (
+        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+          <button
+            type="button"
+            onClick={handleAiOpen}
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-violet-600 text-white shadow-2xl shadow-violet-700/20 transition hover:-translate-y-0.5 hover:bg-violet-700"
+            aria-label="Chat voi AI"
+            title="Chat voi AI"
+          >
+            <span className="material-symbols-outlined">smart_toy</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleOpen}
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-sky-600 text-white shadow-2xl shadow-sky-700/20 transition hover:-translate-y-0.5 hover:bg-sky-700"
+            aria-label="Mo chat ho tro"
+            title="Mo chat ho tro"
+          >
+            <span className="material-symbols-outlined">support_agent</span>
+          </button>
+        </div>
+      )}
+
+      {aiOpen && (
+        <section className="fixed bottom-5 right-5 z-50 flex h-[min(620px,calc(100svh-2.5rem))] w-[min(420px,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <header className="flex items-center justify-between gap-3 border-b border-slate-200 bg-violet-700 px-4 py-3 text-white">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-extrabold">Tro ly AI DTPShop</p>
+              <p className="truncate text-xs text-violet-100">
+                Doc san pham, chinh sach va don hang cua ban
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAiOpen(false)}
+              className="rounded-full p-2 text-violet-50 hover:bg-white/10"
+              aria-label="Dong chat AI"
+            >
+              <span className="material-symbols-outlined text-xl">close</span>
+            </button>
+          </header>
+
+          {aiError && (
+            <div className="border-b border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700">
+              {aiError}
+            </div>
+          )}
+
+          <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 px-4 py-4">
+            {aiMessages.map((message) => {
+              const mine = message.role === "user";
+              return (
+                <div
+                  key={message.id}
+                  className={`flex ${mine ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                      mine
+                        ? "bg-violet-600 text-white"
+                        : "border border-slate-200 bg-white text-slate-800"
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap break-words">{message.message}</p>
+                    <p className={`mt-1 text-[10px] ${mine ? "text-violet-100" : "text-slate-400"}`}>
+                      {new Date(message.timestamp).toLocaleTimeString("vi-VN", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+            {aiStatus === "thinking" ? (
+              <div className="flex justify-start">
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm">
+                  AI dang tra loi...
+                </div>
+              </div>
+            ) : null}
+            <div ref={bottomRef} />
+          </div>
+
+          <form onSubmit={sendAiText} className="border-t border-slate-200 bg-white p-3">
+            <div className="flex items-end gap-2">
+              <textarea
+                value={aiDraft}
+                onChange={(event) => setAiDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    sendAiText(event);
+                  }
+                }}
+                disabled={aiStatus === "thinking"}
+                rows="1"
+                className="min-h-11 flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                placeholder="Hoi ve san pham, don hang, chinh sach..."
+              />
+              <button
+                type="submit"
+                disabled={!aiDraft.trim() || aiStatus === "thinking"}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Gui cau hoi AI"
+              >
+                <span className="material-symbols-outlined">send</span>
+              </button>
+            </div>
+          </form>
+        </section>
       )}
 
       {open && (

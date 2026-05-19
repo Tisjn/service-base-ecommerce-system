@@ -3,6 +3,7 @@ const {
   config,
   productApiPrefixes,
   orderApiPrefixes,
+  aiApiPrefixes,
 } = require("../config/routes.config");
 const { verifyJWT, optionalVerifyJWT } = require("../middlewares/jwtVerify");
 const logger = require("../utils/logger");
@@ -12,7 +13,7 @@ function isWriteRequest(req) {
 }
 
 function requireAuthForWrites(req, res, next) {
-  const path = req.originalUrl.split("?")[0];
+  const path = getRequestUrl(req).split("?")[0];
   const isGuestCompatibleProductPath =
     path.startsWith("/api/cart") ||
     path.startsWith("/cart") ||
@@ -28,7 +29,7 @@ function requireAuthForWrites(req, res, next) {
 }
 
 function requireOrderAuth(req, res, next) {
-  const path = req.originalUrl.split("?")[0];
+  const path = getRequestUrl(req).split("?")[0];
   const isPublicCommentRead =
     req.method === "GET" &&
     (/^\/api\/orders\/products\/[^/]+\/details$/.test(path) ||
@@ -66,12 +67,16 @@ function createProxy(target, options = {}) {
   });
 }
 
+function getRequestUrl(req) {
+  return req.originalUrl || req.url || "";
+}
+
 function rewriteAuth(_path, req) {
-  return req.originalUrl.replace(/^\/api\/auth(?=\/|$)/, "/auth");
+  return getRequestUrl(req).replace(/^\/api\/auth(?=\/|$)/, "/auth");
 }
 
 function rewriteProduct(_path, req) {
-  const originalUrl = req.originalUrl;
+  const originalUrl = getRequestUrl(req);
 
   if (originalUrl.startsWith("/api/")) {
     return originalUrl;
@@ -86,7 +91,7 @@ function rewriteProduct(_path, req) {
 }
 
 function rewriteOrder(_path, req) {
-  const originalUrl = req.originalUrl;
+  const originalUrl = getRequestUrl(req);
 
   if (originalUrl.startsWith("/api/")) {
     return originalUrl;
@@ -98,19 +103,29 @@ function rewriteOrder(_path, req) {
 }
 
 function rewriteChat(_path, req) {
-  return req.originalUrl.replace(/^\/api\/chat(?=\/|$)/, "/chat");
+  return getRequestUrl(req).replace(/^\/api\/chat(?=\/|$)/, "/chat");
+}
+
+function rewriteAi(_path, req) {
+  const originalUrl = getRequestUrl(req);
+
+  if (originalUrl.startsWith("/api/")) {
+    return originalUrl;
+  }
+
+  return originalUrl.replace(/^\/ai(?=\/|$)/, "/api/ai");
 }
 
 function keepOriginalUrl(_path, req) {
-  return req.originalUrl;
+  return getRequestUrl(req);
 }
 
 function rewriteUser(_path, req) {
-  return req.originalUrl.replace(/^\/users(?=\/|$)/, "/api/users");
+  return getRequestUrl(req).replace(/^\/users(?=\/|$)/, "/api/users");
 }
 
 function rewritePayment(_path, req) {
-  return req.originalUrl.replace(/^\/payments(?=\/|$)/, "/api/payments");
+  return getRequestUrl(req).replace(/^\/payments(?=\/|$)/, "/api/payments");
 }
 
 function setupProxyRoutes(app) {
@@ -139,6 +154,10 @@ function setupProxyRoutes(app) {
     pathRewrite: rewritePayment,
   });
 
+  const aiProxy = createProxy(config.aiServiceUrl, {
+    pathRewrite: rewriteAi,
+  });
+
   app.use(["/auth", "/api/auth"], authProxy);
   app.use(["/users", "/api/users"], verifyJWT, userProxy);
   app.use(productApiPrefixes, requireAuthForWrites, productProxy);
@@ -150,6 +169,8 @@ function setupProxyRoutes(app) {
   app.use(orderApiPrefixes, requireOrderAuth, orderProxy);
   app.use(["/orders", "/admin/products"], requireOrderAuth, orderProxy);
   app.use(["/payments", "/api/payments"], verifyJWT, paymentProxy);
+  app.use(aiApiPrefixes, verifyJWT, aiProxy);
+  app.use(["/ai"], verifyJWT, aiProxy);
   app.use(["/chat", "/api/chat"], verifyJWT, chatProxy);
   app.use(["/uploads"], chatProxy);
   app.use(

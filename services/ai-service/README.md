@@ -1,50 +1,102 @@
 # AI Service
 
-`ai-service` là service trợ lý dữ liệu cho admin, được xây dựng bằng **Spring Boot** + **Spring AI** để kết nối với **Grok AI API** và đọc dữ liệu từ **AWS RDS**. Mục tiêu của service là cho phép admin hỏi bằng ngôn ngữ tự nhiên và nhận lại câu trả lời ngắn gọn, có số liệu rõ ràng về sản phẩm, danh mục, tồn kho, đơn hàng và các bảng liên quan trong CSDL.
+`ai-service` is the customer support assistant for DTPShop. It reads a safe, fixed subset of the e-commerce database, builds a filtered context for the current user, and asks Google AI Studio/Gemini to answer in Vietnamese.
 
-## Mục đích
+## Security Model
 
-- Trả lời nhanh các câu hỏi như còn bao nhiêu hàng, có bao nhiêu loại, sản phẩm nào sắp hết.
-- Tổng hợp dữ liệu từ nhiều bảng trong RDS để tạo insight cho admin.
-- Chỉ cho phép truy vấn đọc dữ liệu, không cho phép ghi, xóa hoặc thay đổi schema.
-- Dùng Grok AI để diễn giải kết quả DB thành câu trả lời tự nhiên, dễ hiểu.
+The service does not let Gemini generate or run SQL. All database reads are fixed `JdbcTemplate` queries.
 
-## Cách hoạt động
+Allowed tables:
 
-1. Admin gửi câu hỏi đến REST API của `ai-service`.
-2. Spring AI chuyển prompt và ngữ cảnh schema đến Grok AI.
-3. Grok AI xác định bảng/cột cần truy vấn.
-4. Service chạy truy vấn read-only trên RDS.
-5. Kết quả được tổng hợp và trả lại bằng câu trả lời tự nhiên.
+- `products`
+- `categories`
+- `orders`, only rows where `orders.user_id = X-User-Id`
+- `order_items`, only rows joined through orders owned by `X-User-Id`
+- `faq_policy`
 
-## API chính
+`X-User-Id` is expected to be injected by `api-gateway` after JWT verification. Direct calls without `X-User-Id` return `401`.
 
-- `POST /api/admin/ai/ask` - Hỏi bất kỳ câu hỏi nào về dữ liệu trong RDS.
-- `GET /api/admin/ai/summary` - Xem tóm tắt nhanh về số hàng, số loại, tồn kho và cảnh báo.
-- `GET /api/admin/ai/schema` - Xem metadata của các bảng được whitelist.
-- `GET /api/admin/ai/table/{tableName}` - Xem thống kê của một bảng cụ thể.
-- `POST /api/admin/ai/insights` - Sinh báo cáo AI theo phạm vi đã chọn.
+## Environment
 
-## Công nghệ
+```env
+RDS_HOST=database-1-instance-1.cvwyy4mmuaiw.ap-southeast-1.rds.amazonaws.com
+RDS_PORT=3306
+RDS_DB=ecommerce_data
+RDS_USER=admin
+RDS_PASSWORD=your-password
+RDS_SSL=false
 
-- Spring Boot 3.x
-- Java 21
-- Spring AI
-- xAI Grok API
-- Spring Web
-- Spring Data JPA hoặc JdbcTemplate
-- AWS RDS MySQL
-- Spring Security cho endpoint admin
+GOOGLE_AI_API_KEY=your-google-ai-studio-api-key
+GOOGLE_AI_MODEL=gemini-2.5-flash
+SERVER_PORT=3009
+```
 
-## Tài liệu chi tiết
+Keep `GOOGLE_AI_API_KEY` in environment variables or `.env`; do not commit it.
 
-- [Product Description](./product.md)
-- [Project Structure](./structure.md)
-- [Technology & Design](./tech.md)
+## API
 
-## Lưu ý vận hành
+### Ask Assistant
 
-- Chỉ whitelist các bảng an toàn để truy vấn.
-- Luôn loại bỏ dữ liệu nhạy cảm trước khi đưa vào prompt cho AI.
-- Ưu tiên truy vấn tổng hợp như `COUNT`, `SUM`, `GROUP BY` để trả lời nhanh.
-- Nếu schema thay đổi, chỉ cần cập nhật whitelist và prompt mà không cần đổi cách hỏi của admin.
+```http
+POST /api/ai/ask
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "question": "Don hang gan nhat cua toi dang o trang thai nao?"
+}
+```
+
+Response:
+
+```json
+{
+  "answer": "Don hang gan nhat cua ban...",
+  "readableTables": [
+    "products",
+    "categories",
+    "orders:self_only",
+    "order_items:self_only",
+    "faq_policy"
+  ]
+}
+```
+
+### Read Filtered Context
+
+```http
+GET /api/ai/summary
+Authorization: Bearer <access-token>
+```
+
+This endpoint is useful for debugging. It returns the exact filtered context used by the assistant.
+
+### Health
+
+```http
+GET /api/ai/health
+```
+
+## Run Locally
+
+From `services/ai-service`:
+
+```bash
+mvn spring-boot:run
+```
+
+Or with Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+## Gateway
+
+`api-gateway` proxies these routes to this service:
+
+- `/api/ai/*`
+- `/ai/*`
+- `/api/admin/ai/*`
+
+All AI routes require JWT at the gateway so user-specific order data stays scoped to the authenticated user.

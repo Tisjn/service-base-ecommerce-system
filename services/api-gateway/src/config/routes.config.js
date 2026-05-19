@@ -20,6 +20,9 @@ const config = {
   paymentServiceUrl: trimTrailingSlash(
     process.env.PAYMENT_SERVICE_URL || "http://localhost:3005",
   ),
+  aiServiceUrl: trimTrailingSlash(
+    process.env.AI_SERVICE_URL || "http://localhost:3009",
+  ),
   chatServiceUrl: trimTrailingSlash(
     process.env.CHAT_SERVICE_URL || "http://localhost:3008",
   ),
@@ -34,9 +37,11 @@ const productApiPrefixes = [
 ];
 
 const orderApiPrefixes = ["/api/orders", "/api/admin/products"];
+const aiApiPrefixes = ["/api/ai", "/api/admin/ai"];
 
 module.exports = {
   config,
   productApiPrefixes,
   orderApiPrefixes,
+  aiApiPrefixes,
 };
