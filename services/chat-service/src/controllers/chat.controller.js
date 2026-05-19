@@ -56,9 +56,21 @@ async function closeRoom(req, res, next) {
   }
 }
 
+async function reopenRoom(req, res, next) {
+  try {
+    const room = await chatService.reopenRoom(req.params.roomId, req.user);
+    socketServer?.to(`room:${room.roomId}`).emit("room_reopened", room);
+    res.json(room);
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function listMessages(req, res, next) {
   try {
-    res.json(await chatService.listMessages(req.params.roomId, req.user, req.query));
+    res.json(
+      await chatService.listMessages(req.params.roomId, req.user, req.query),
+    );
   } catch (error) {
     next(error);
   }
@@ -71,5 +83,6 @@ module.exports = {
   joinRoom,
   listMessages,
   listRooms,
+  reopenRoom,
   setSocketServer,
 };

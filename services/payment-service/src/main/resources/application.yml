@@ -2,9 +2,9 @@ spring:
   application:
     name: payment-service
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://${RDS_HOST:localhost}:${RDS_PORT:3306}/${RDS_DB:paymentdb}?useSSL=${RDS_SSL:false}&allowPublicKeyRetrieval=true}
-    username: ${SPRING_DATASOURCE_USERNAME:${RDS_USER:root}}
-    password: ${SPRING_DATASOURCE_PASSWORD:${RDS_PASSWORD:password}}
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://${RDS_HOST:${DB_HOST:localhost}}:${RDS_PORT:${DB_PORT:3306}}/${RDS_DB:${DB_NAME:paymentdb}}?useSSL=${RDS_SSL:${DB_SSL:false}}&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:${RDS_USER:${DB_USER:root}}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${RDS_PASSWORD:${DB_PASSWORD:password}}}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:

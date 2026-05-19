@@ -45,6 +45,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: order-service
+    env_file:
+      - .env
     ports:
       - "3004:3004"
     environment:

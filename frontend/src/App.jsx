@@ -68,11 +68,14 @@ function App() {
     setRefreshToken(refresh);
     setUser(userData || null);
     setShowLogin(false);
-    // Note: Guest cart merge is handled in CustomerOrderHubPage useEffect
-    // when it detects userId change and guestToken exists
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await orderApi.notifyCartOnLogout();
+    } catch {
+      // Logout should still continue if the cart session endpoint is unavailable.
+    }
     localStorage.removeItem("authToken");
     localStorage.removeItem("authRefreshToken");
     localStorage.removeItem("authUser");

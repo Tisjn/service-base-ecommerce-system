@@ -43,7 +43,9 @@ const env = {
     name: requireEnv("DB_NAME"),
     user: requireEnv("DB_USER"),
     password: requireEnv("DB_PASSWORD"),
+    //
     ssl: toBool("DB_SSL", false),
+    // Số lượng kết nối tối đa trong pool
     poolLimit: toInt("DB_POOL_LIMIT", 10),
   },
   redis: {
@@ -52,6 +54,7 @@ const env = {
     password: process.env.REDIS_PASSWORD || undefined,
     db: toInt("REDIS_DB", 0),
   },
+  //  (JWT gồm header.payload.signature)
   jwt: {
     secret: requireEnv("JWT_SECRET"),
     accessExpiresIn: process.env.JWT_EXPIRES_IN || "15m",
@@ -60,6 +63,7 @@ const env = {
   smtp: {
     host: requireEnv("SMTP_HOST"),
     port: toInt("SMTP_PORT", 587),
+    // Nếu SMTP_SECURE=true hoặc SMTP_PORT=465 thì sẽ sử dụng kết nối TLS
     secure: toBool("SMTP_SECURE", false),
     user: requireEnv("SMTP_USER"),
     pass: requireEnv("SMTP_PASS"),
@@ -71,14 +75,19 @@ const env = {
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
   },
   otp: {
+    //thời gian OTP tồn tại (tính bằng giây)
     ttlSeconds: toInt("OTP_TTL_SECONDS", 300),
+    // số lần nhập OTP sai tối đa trước khi khóa tài khoản
     maxAttempts: toInt("OTP_MAX_ATTEMPTS", 3),
   },
   password: {
+    // số lần băm mật khẩu (salt rounds) - càng cao thì càng an toàn nhưng cũng càng tốn thời gian để xử lý
     saltRounds: toInt("PASSWORD_SALT_ROUNDS", 12),
   },
   limits: {
+    // Giới hạn tốc độ cho các endpoint liên quan đến đăng ký, đăng nhập và quên mật khẩu
     registerWindowMs: toInt("REGISTER_RATE_LIMIT_WINDOW_MS", 60000),
+    // số lần yêu cầu tối đa cho mỗi IP trong khoảng thời gian đã định (ví dụ: 5 lần mỗi phút)
     registerMax: toInt("REGISTER_RATE_LIMIT_MAX", 5),
     loginWindowMs: toInt("LOGIN_RATE_LIMIT_WINDOW_MS", 60000),
     loginMax: toInt("LOGIN_RATE_LIMIT_MAX", 5),

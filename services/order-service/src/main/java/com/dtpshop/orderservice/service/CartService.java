@@ -16,12 +16,12 @@ public class CartService {
         this.cartRepository = cartRepository;
     }
 
-    public List<CartItemDto> getCart(Long userId) {
-        return cartRepository.getCart(userId.toString());
+    public List<CartItemDto> getCart(String cartKey) {
+        return cartRepository.getCart(cartKey);
     }
 
-    public void addItem(Long userId, CartItemDto item) {
-        List<CartItemDto> items = new ArrayList<>(cartRepository.getCart(userId.toString()));
+    public void addItem(String cartKey, CartItemDto item) {
+        List<CartItemDto> items = new ArrayList<>(cartRepository.getCart(cartKey));
         boolean updated = false;
         for (CartItemDto existing : items) {
             if (existing.getProductId().equals(item.getProductId())) {
@@ -34,11 +34,11 @@ public class CartService {
         if (!updated) {
             items.add(item);
         }
-        cartRepository.saveCart(userId.toString(), items);
+        cartRepository.saveCart(cartKey, items);
     }
 
-    public void updateItem(Long userId, Long productId, Integer quantity) {
-        List<CartItemDto> items = new ArrayList<>(cartRepository.getCart(userId.toString()));
+    public void updateItem(String cartKey, Long productId, Integer quantity) {
+        List<CartItemDto> items = new ArrayList<>(cartRepository.getCart(cartKey));
         if (CollectionUtils.isEmpty(items)) {
             return;
         }
@@ -49,16 +49,47 @@ public class CartService {
                 break;
             }
         }
-        cartRepository.saveCart(userId.toString(), items);
+        cartRepository.saveCart(cartKey, items);
     }
 
-    public void removeItem(Long userId, Long productId) {
-        List<CartItemDto> items = new ArrayList<>(cartRepository.getCart(userId.toString()));
+    public void removeItem(String cartKey, Long productId) {
+        List<CartItemDto> items = new ArrayList<>(cartRepository.getCart(cartKey));
         items.removeIf(item -> item.getProductId().equals(productId));
-        cartRepository.saveCart(userId.toString(), items);
+        cartRepository.saveCart(cartKey, items);
     }
 
-    public void clearCart(Long userId) {
-        cartRepository.clearCart(userId.toString());
+    public void clearCart(String cartKey) {
+        cartRepository.clearCart(cartKey);
+    }
+
+    public void mergeCart(String sourceCartKey, String targetCartKey) {
+        if (sourceCartKey == null || targetCartKey == null || sourceCartKey.equals(targetCartKey)) {
+            return;
+        }
+
+        List<CartItemDto> sourceItems = new ArrayList<>(cartRepository.getCart(sourceCartKey));
+        if (sourceItems.isEmpty()) {
+            return;
+        }
+
+        List<CartItemDto> targetItems = new ArrayList<>(cartRepository.getCart(targetCartKey));
+        for (CartItemDto sourceItem : sourceItems) {
+            boolean merged = false;
+            for (CartItemDto targetItem : targetItems) {
+                if (targetItem.getProductId().equals(sourceItem.getProductId())) {
+                    targetItem.setQuantity((targetItem.getQuantity() == null ? 0 : targetItem.getQuantity())
+                            + (sourceItem.getQuantity() == null ? 0 : sourceItem.getQuantity()));
+                    targetItem.setPrice(sourceItem.getPrice());
+                    merged = true;
+                    break;
+                }
+            }
+            if (!merged) {
+                targetItems.add(sourceItem);
+            }
+        }
+
+        cartRepository.saveCart(targetCartKey, targetItems);
+        cartRepository.clearCart(sourceCartKey);
     }
 }

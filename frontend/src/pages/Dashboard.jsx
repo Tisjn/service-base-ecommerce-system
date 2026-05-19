@@ -3,6 +3,7 @@ import AccountProfilePage from "./customer/AccountProfilePage.jsx";
 import CustomerOrderHubPage from "./customer/CustomerOrderHubPage";
 import ProductAdminPage from "./admin/products/ProductAdminPage";
 import ChatWidget from "../components/chat/ChatWidget.jsx";
+import BrandLogo from "../components/BrandLogo.jsx";
 
 function isAdminUser(user) {
   return String(user?.role || user?.roles?.[0] || user?.authorities?.[0] || "")
@@ -35,24 +36,24 @@ function Dashboard({ onLogout, onUserUpdate, onRequestLogin, user }) {
       ? "Quản trị sản phẩm"
       : activeView === "account"
         ? "Tài khoản"
-        : "DTPShop";
+        : "Đơn hàng";
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.1),transparent_30%),radial-gradient(circle_at_top_right,rgba(249,115,22,0.12),transparent_30%),linear-gradient(180deg,#f8fbff_0%,#f3f7fb_100%)] px-4 py-6 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,0.12),transparent_28%),radial-gradient(circle_at_top_right,rgba(17,17,17,0.06),transparent_30%),linear-gradient(180deg,#fffaf5_0%,#f7f4ef_100%)] px-4 py-6 sm:px-6 lg:px-8">
       <section className="mx-auto grid max-w-7xl gap-6">
-        <div className="rounded-4xl border border-white/70 bg-white/90 p-5 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.35)] backdrop-blur sm:p-6">
+        <div className="rounded-4xl border border-[#ead8cc] bg-white/90 p-5 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.28)] backdrop-blur sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.4em] text-sky-600/80">
-                DTPShop
-              </p>
-              <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+            <div className="flex min-w-0 flex-col gap-3">
+              <BrandLogo className="h-24 w-full max-w-[560px] object-contain object-left sm:h-28" />
+              <div>
+              <h1 className="sr-only">
                 {pageTitle}
               </h1>
-              <p className="mt-2 text-sm text-slate-600">
+              <p className="text-sm text-slate-600">
                 Xin chào {user?.fullName || user?.email || "người dùng"}. Bạn có
                 thể mua hàng, theo dõi đơn, quản trị và chỉnh sửa hồ sơ.
               </p>
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -65,7 +66,6 @@ function Dashboard({ onLogout, onUserUpdate, onRequestLogin, user }) {
               {user ? (
                 <NavButton
                   active={activeView === "account"}
-                  activeClass="bg-emerald-600 text-white shadow-lg shadow-emerald-500/20"
                   onClick={() => setActiveView("account")}
                 >
                   Tài khoản
@@ -84,7 +84,7 @@ function Dashboard({ onLogout, onUserUpdate, onRequestLogin, user }) {
                 <button
                   type="button"
                   onClick={onLogout}
-                  className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-slate-800"
+                  className="rounded-2xl bg-orange-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-orange-500/20 transition hover:-translate-y-0.5 hover:bg-orange-700"
                 >
                   Đăng xuất
                 </button>
@@ -116,7 +116,7 @@ function Dashboard({ onLogout, onUserUpdate, onRequestLogin, user }) {
 
 function NavButton({
   active,
-  activeClass = "bg-sky-600 text-white shadow-lg shadow-sky-500/20",
+  activeClass = "bg-orange-600 text-white shadow-lg shadow-orange-500/20",
   children,
   onClick,
 }) {

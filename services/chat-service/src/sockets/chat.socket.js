@@ -1,10 +1,16 @@
 const chatService = require("../services/chat.service");
 const { isAdmin } = require("../utils/jwt.utils");
+const logger = require("../utils/logger");
 
 function registerChatSocket(io, socket) {
   if (isAdmin(socket.user)) {
     socket.join("admins");
   }
+
+  logger.info("socket connected", {
+    user: socket.user?.userId || socket.user?.id,
+    id: socket.id,
+  });
 
   socket.on("join_room", async ({ roomId } = {}, ack) => {
     try {
@@ -13,6 +19,11 @@ function registerChatSocket(io, socket) {
         await chatService.joinAsAdmin(roomId, socket.user);
       }
       socket.join(`room:${roomId}`);
+      logger.info("socket joined room", {
+        socketId: socket.id,
+        roomId,
+        user: socket.user?.userId,
+      });
       socket.to(`room:${roomId}`).emit("user_joined", {
         roomId,
         userId: socket.user.userId,
@@ -20,6 +31,11 @@ function registerChatSocket(io, socket) {
       });
       ack?.({ ok: true });
     } catch (error) {
+      logger.error("join_room error", {
+        error: error.message,
+        socketId: socket.id,
+        roomId,
+      });
       ack?.({ ok: false, message: error.message });
       socket.emit("chat_error", { message: error.message });
     }
@@ -36,19 +52,29 @@ function registerChatSocket(io, socket) {
 
   socket.on("message", async (payload = {}, ack) => {
     try {
+      logger.info("socket received message", { socketId: socket.id, payload });
       const savedMessage = await chatService.saveMessage({
         roomId: payload.roomId,
         user: socket.user,
         message: payload.message,
         type: payload.type,
         fileUrl: payload.fileUrl,
+        mimeType: payload.mimeType,
+      });
+      logger.info("emitting saved message", {
+        roomId: payload.roomId,
+        messageId: savedMessage.id,
       });
       io.to(`room:${payload.roomId}`).emit("message", savedMessage);
-      if (!isAdmin(socket.user)) {
-        io.to("admins").emit("new_message", savedMessage);
-      }
+      io.to("admins").emit("new_message", savedMessage);
+
       ack?.({ ok: true, message: savedMessage });
     } catch (error) {
+      logger.error("message handling error", {
+        error: error.message,
+        socketId: socket.id,
+        payload,
+      });
       ack?.({ ok: false, message: error.message });
       socket.emit("chat_error", { message: error.message });
     }

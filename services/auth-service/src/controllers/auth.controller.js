@@ -199,6 +199,7 @@ const changePassword = asyncHandler(async (req, res) => {
   const result = await passwordService.changePassword({
     userId: payload.userId,
     currentPassword: req.body.currentPassword,
+    otp: req.body.otp,
     newPassword: req.body.newPassword,
   });
   res.status(200).json(result);

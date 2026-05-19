@@ -34,6 +34,22 @@ async function findActiveByCustomer(customerId) {
   return (result.Items || [])[0] || null;
 }
 
+async function findLatestByCustomer(customerId) {
+  const result = await ddb.send(
+    new QueryCommand({
+      TableName,
+      IndexName: "customerId-createdAt-index",
+      KeyConditionExpression: "customerId = :customerId",
+      ExpressionAttributeValues: {
+        ":customerId": String(customerId),
+      },
+      ScanIndexForward: false,
+      Limit: 1,
+    }),
+  );
+  return (result.Items || [])[0] || null;
+}
+
 async function create(room) {
   await ddb.send(new PutCommand({ TableName, Item: room }));
   return room;
@@ -69,7 +85,9 @@ async function listForAdmin(status) {
 
   const result = await ddb.send(new ScanCommand({ TableName }));
   return (result.Items || []).sort((a, b) =>
-    String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)),
+    String(b.updatedAt || b.createdAt).localeCompare(
+      String(a.updatedAt || a.createdAt),
+    ),
   );
 }
 
@@ -79,7 +97,8 @@ async function assignAdmin(roomId, adminId) {
     new UpdateCommand({
       TableName,
       Key: { roomId },
-      UpdateExpression: "SET adminId = if_not_exists(adminId, :adminId), updatedAt = :now",
+      UpdateExpression:
+        "SET adminId = if_not_exists(adminId, :adminId), updatedAt = :now",
       ExpressionAttributeValues: {
         ":adminId": String(adminId),
         ":now": now,
@@ -96,10 +115,30 @@ async function markClosed(roomId) {
     new UpdateCommand({
       TableName,
       Key: { roomId },
-      UpdateExpression: "SET #status = :status, updatedAt = :now, closedAt = :now",
+      UpdateExpression:
+        "SET #status = :status, updatedAt = :now, closedAt = :now",
       ExpressionAttributeNames: { "#status": "status" },
       ExpressionAttributeValues: {
         ":status": "closed",
+        ":now": now,
+      },
+      ReturnValues: "ALL_NEW",
+    }),
+  );
+  return result.Attributes;
+}
+
+async function reopenRoom(roomId) {
+  const now = new Date().toISOString();
+  const result = await ddb.send(
+    new UpdateCommand({
+      TableName,
+      Key: { roomId },
+      UpdateExpression:
+        "SET #status = :status, updatedAt = :now REMOVE closedAt",
+      ExpressionAttributeNames: { "#status": "status" },
+      ExpressionAttributeValues: {
+        ":status": "active",
         ":now": now,
       },
       ReturnValues: "ALL_NEW",
@@ -130,8 +169,10 @@ module.exports = {
   create,
   findActiveByCustomer,
   findById,
+  findLatestByCustomer,
   listForAdmin,
   listForCustomer,
   markClosed,
+  reopenRoom,
   updateLastMessage,
 };

@@ -17,6 +17,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -43,20 +44,20 @@ class OrderControllerIntegrationTest {
     @Test
     void shouldAddCartItem() throws Exception {
         String payload = "{\"productId\":100,\"productName\":\"Suitcase\",\"quantity\":2,\"price\":49.99}";
-        mockMvc.perform(post("/api/cart/1/items")
+        mockMvc.perform(post("/api/cart/items")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload))
                 .andExpect(status().isCreated());
 
-        verify(cartService).addItem(eq(1L), any(CartItemDto.class));
+        verify(cartService).addItem(argThat(key -> key != null && key.startsWith("guest:")), any(CartItemDto.class));
     }
 
     @Test
     void shouldGetCartItems() throws Exception {
-        when(cartService.getCart(1L)).thenReturn(List.of(
+        when(cartService.getCart(argThat(key -> key != null && key.startsWith("guest:")))).thenReturn(List.of(
                 new CartItemDto(100L, "Suitcase", 2, new BigDecimal("49.99"))));
 
-        mockMvc.perform(get("/api/cart/1"))
+        mockMvc.perform(get("/api/cart"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].productId").value(100))
                 .andExpect(jsonPath("$[0].productName").value("Suitcase"))
@@ -67,28 +68,28 @@ class OrderControllerIntegrationTest {
     void shouldUpdateCartItemQuantity() throws Exception {
         String payload = "{\"quantity\":3}";
 
-        mockMvc.perform(patch("/api/cart/1/items/100")
+        mockMvc.perform(patch("/api/cart/items/100")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload))
                 .andExpect(status().isNoContent());
 
-        verify(cartService).updateItem(eq(1L), eq(100L), eq(3));
+        verify(cartService).updateItem(argThat(key -> key != null && key.startsWith("guest:")), eq(100L), eq(3));
     }
 
     @Test
     void shouldRemoveCartItem() throws Exception {
-        mockMvc.perform(delete("/api/cart/1/items/100"))
+        mockMvc.perform(delete("/api/cart/items/100"))
                 .andExpect(status().isNoContent());
 
-        verify(cartService).removeItem(1L, 100L);
+        verify(cartService).removeItem(argThat(key -> key != null && key.startsWith("guest:")), eq(100L));
     }
 
     @Test
     void shouldClearCart() throws Exception {
-        mockMvc.perform(delete("/api/cart/1"))
+        mockMvc.perform(delete("/api/cart"))
                 .andExpect(status().isNoContent());
 
-        verify(cartService).clearCart(1L);
+        verify(cartService).clearCart(argThat(key -> key != null && key.startsWith("guest:")));
     }
 
     @Test
@@ -99,9 +100,9 @@ class OrderControllerIntegrationTest {
         order.setStatus(OrderStatus.PENDING);
         order.setTotalAmount(new BigDecimal("99.98"));
 
-        when(orderService.createOrder(eq(1L), any(OrderRequestDto.class))).thenReturn(order);
+        when(orderService.createOrder(eq(1L), eq("1"), any(), any(OrderRequestDto.class))).thenReturn(order);
 
-        String payload = "{\"shippingAddress\":\"123 Test Street\"}";
+        String payload = "{\"addressId\":10,\"note\":\"123 Test Street\"}";
         mockMvc.perform(post("/api/orders?userId=1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload))
@@ -118,9 +119,9 @@ class OrderControllerIntegrationTest {
         order.setStatus(OrderStatus.PENDING);
         order.setTotalAmount(new BigDecimal("199.96"));
 
-        when(orderService.createOrder(eq(2L), any(OrderRequestDto.class))).thenReturn(order);
+        when(orderService.createOrder(eq(2L), eq("2"), any(), any(OrderRequestDto.class))).thenReturn(order);
 
-        String payload = "{\"shippingAddress\":\"456 Another St\"}";
+        String payload = "{\"addressId\":20,\"note\":\"456 Another St\"}";
         mockMvc.perform(post("/api/orders/2")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(payload))

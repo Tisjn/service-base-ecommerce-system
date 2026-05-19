@@ -11,7 +11,7 @@ const pool = mysql.createPool({
   connectionLimit: env.db.poolLimit,
   decimalNumbers: true,
   timezone: "Z",
-  ssl: env.db.ssl ? { rejectUnauthorized: false } : undefined,
+  ssl: env.db.ssl ? { rejectUnauthorized: true } : undefined,
 });
 
 module.exports = pool;

@@ -15,8 +15,6 @@ function isWriteRequest(req) {
 function requireAuthForWrites(req, res, next) {
   const path = getRequestUrl(req).split("?")[0];
   const isGuestCompatibleProductPath =
-    path.startsWith("/api/cart") ||
-    path.startsWith("/cart") ||
     path.startsWith("/api/inventory") ||
     path.startsWith("/inventory");
 
@@ -85,7 +83,6 @@ function rewriteProduct(_path, req) {
   return originalUrl
     .replace(/^\/products(?=\/|$)/, "/api/products")
     .replace(/^\/categories(?=\/|$)/, "/api/categories")
-    .replace(/^\/cart(?=\/|$)/, "/api/cart")
     .replace(/^\/product-images(?=\/|$)/, "/api/product-images")
     .replace(/^\/inventory(?=\/|$)/, "/api/inventory");
 }
@@ -98,6 +95,7 @@ function rewriteOrder(_path, req) {
   }
 
   return originalUrl
+    .replace(/^\/cart(?=\/|$)/, "/api/cart")
     .replace(/^\/orders(?=\/|$)/, "/api/orders")
     .replace(/^\/admin\/products(?=\/|$)/, "/api/admin/products");
 }
@@ -160,9 +158,10 @@ function setupProxyRoutes(app) {
 
   app.use(["/auth", "/api/auth"], authProxy);
   app.use(["/users", "/api/users"], verifyJWT, userProxy);
+  app.use(["/cart", "/api/cart"], optionalVerifyJWT, orderProxy);
   app.use(productApiPrefixes, requireAuthForWrites, productProxy);
   app.use(
-    ["/products", "/categories", "/cart", "/product-images", "/inventory"],
+    ["/products", "/categories", "/product-images", "/inventory"],
     requireAuthForWrites,
     productProxy,
   );

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   changePassword,
   deleteProfileAvatar,
+  forgotPassword,
   updateProfileAvatar,
 } from "../../api/authApi";
 import {
@@ -24,8 +25,20 @@ const emptyAddress = {
   defaultAddress: false,
 };
 
+const primaryButtonClass =
+  "inline-flex min-w-[180px] items-center justify-center whitespace-nowrap rounded-md bg-[#075bd8] px-7 py-3 text-sm font-extrabold text-white transition hover:bg-[#064fb9] disabled:cursor-not-allowed disabled:opacity-60";
+
+const secondaryButtonClass =
+  "inline-flex min-w-[132px] items-center justify-center whitespace-nowrap rounded-md bg-[#edf0f7] px-4 py-3 text-sm font-extrabold text-slate-900 transition hover:bg-[#e2e6f1] disabled:cursor-not-allowed disabled:opacity-60";
+
+const dangerButtonClass =
+  "rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-extrabold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60";
+
 function getInitial(nameOrEmail) {
-  return String(nameOrEmail || "U").trim().charAt(0).toUpperCase();
+  return String(nameOrEmail || "U")
+    .trim()
+    .charAt(0)
+    .toUpperCase();
 }
 
 function getErrorMessage(error, fallback) {
@@ -62,68 +75,90 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
   const [addresses, setAddresses] = useState([]);
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
+    otp: "",
     newPassword: "",
     confirmPassword: "",
   });
+  const [passwordOtpSent, setPasswordOtpSent] = useState(false);
+  const [passwordOtpSending, setPasswordOtpSending] = useState(false);
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState("");
-  const [loading, setLoading] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
   const [savingAddress, setSavingAddress] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [savingAvatar, setSavingAvatar] = useState(false);
   const [deletingAvatar, setDeletingAvatar] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [editingAddress, setEditingAddress] = useState(false);
 
   const displayName = profile?.fullName || profile?.email || "Người dùng";
   const currentAvatar = avatarPreview || profile?.avatarUrl || "";
+  const profileEmail = profile?.email || user?.email || "";
 
   const navItems = useMemo(
     () => [
-      { id: "profile", icon: "person", label: "Profile Info" },
-      { id: "security", icon: "shield", label: "Security" },
-      { id: "addresses", icon: "location_on", label: "Addresses" },
+      { id: "profile", icon: "person", label: "Thông tin cá nhân" },
+      { id: "security", icon: "shield", label: "Bảo mật" },
+      { id: "addresses", icon: "location_on", label: "Địa chỉ" },
     ],
     [],
+  );
+
+  const updateLocalProfile = useCallback(
+    (nextProfile) => {
+      setProfile((prevProfile) => {
+        const merged = { ...(prevProfile || {}), ...(nextProfile || {}) };
+        if (!editingProfile) {
+          setProfileForm({
+            fullName: merged.fullName || "",
+            phone: merged.phone || "",
+          });
+        }
+        return merged;
+      });
+      onUserUpdate?.(nextProfile);
+    },
+    [onUserUpdate, editingProfile],
   );
 
   useEffect(() => {
     let cancelled = false;
     if (!accessToken) return undefined;
 
-    setLoading(true);
-    Promise.allSettled([getUserProfile(accessToken), getUserAddresses(accessToken)])
-      .then(([profileResult, addressResult]) => {
-        if (cancelled) return;
+    Promise.allSettled([
+      getUserProfile(accessToken),
+      getUserAddresses(accessToken),
+    ]).then(([profileResult, addressResult]) => {
+      if (cancelled) return;
 
-        if (profileResult.status === "fulfilled") {
-          updateLocalProfile(profileResult.value);
-        } else {
-          setNotice({
-            type: "error",
-            message: getErrorMessage(
-              profileResult.reason,
-              "Không tải được thông tin tài khoản từ user-service.",
-            ),
-          });
-        }
+      if (profileResult.status === "fulfilled") {
+        updateLocalProfile(profileResult.value);
+      } else {
+        setNotice({
+          type: "error",
+          message: getErrorMessage(
+            profileResult.reason,
+            "Không tải được thông tin tài khoản từ user-service.",
+          ),
+        });
+      }
 
-        if (addressResult.status === "fulfilled") {
-          const nextAddresses = Array.isArray(addressResult.value)
-            ? addressResult.value
-            : [];
-          setAddresses(nextAddresses);
+      if (addressResult.status === "fulfilled") {
+        const nextAddresses = Array.isArray(addressResult.value)
+          ? addressResult.value
+          : [];
+        setAddresses(nextAddresses);
+        if (!editingAddress) {
           setAddressForm(toAddressForm(nextAddresses[0] || null));
         }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      }
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [accessToken]);
+  }, [accessToken, updateLocalProfile]);
 
   useEffect(
     () => () => {
@@ -131,16 +166,6 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
     },
     [avatarPreview],
   );
-
-  function updateLocalProfile(nextProfile) {
-    const merged = { ...(profile || {}), ...(nextProfile || {}) };
-    setProfile(merged);
-    setProfileForm({
-      fullName: merged.fullName || "",
-      phone: merged.phone || "",
-    });
-    onUserUpdate?.(merged);
-  }
 
   function setProfileValue(field, value) {
     setProfileForm((prev) => ({ ...prev, [field]: value }));
@@ -170,7 +195,10 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
     } catch (error) {
       setNotice({
         type: "error",
-        message: getErrorMessage(error, "Không cập nhật được thông tin cá nhân."),
+        message: getErrorMessage(
+          error,
+          "Không cập nhật được thông tin cá nhân.",
+        ),
       });
     } finally {
       setSavingProfile(false);
@@ -204,8 +232,27 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
       const data = addressForm.id
         ? await updateUserAddress(accessToken, addressForm.id, payload)
         : await createUserAddress(accessToken, payload);
-      await refreshAddresses(data?.id);
-      setNotice({ type: "success", message: "Đã lưu địa chỉ vào user-service." });
+      const savedAddress = toAddressForm(data);
+      setAddresses((prevAddresses) => {
+        const withoutSaved = prevAddresses.filter(
+          (address) => address.id !== savedAddress.id,
+        );
+        return [
+          ...withoutSaved,
+          {
+            ...savedAddress,
+            defaultAddress:
+              savedAddress.defaultAddress || withoutSaved.length === 0,
+          },
+        ].sort((left, right) => {
+          if (left.defaultAddress === right.defaultAddress) {
+            return (right.id || 0) - (left.id || 0);
+          }
+          return left.defaultAddress ? -1 : 1;
+        });
+      });
+      setAddressForm(savedAddress);
+      setNotice({ type: "success", message: "Đã lưu địa chỉ thành công." });
     } catch (error) {
       setNotice({
         type: "error",
@@ -224,7 +271,9 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
       nextAddresses.find((address) => address.id === selectedId) ||
       nextAddresses[0] ||
       null;
-    setAddressForm(toAddressForm(selected));
+    if (!editingAddress) {
+      setAddressForm(toAddressForm(selected));
+    }
   }
 
   async function handleDeleteAddress(addressId) {
@@ -255,12 +304,30 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
 
   async function handleChangePassword(event) {
     event.preventDefault();
+    if (!passwordForm.currentPassword.trim()) {
+      setNotice({ type: "error", message: "Vui lòng nhập mật khẩu hiện tại." });
+      return;
+    }
+    if (!passwordOtpSent) {
+      setNotice({
+        type: "error",
+        message: "Vui lòng gửi OTP trước khi đổi mật khẩu.",
+      });
+      return;
+    }
+    if (!passwordForm.otp.trim()) {
+      setNotice({ type: "error", message: "Vui lòng nhập mã OTP." });
+      return;
+    }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       setNotice({ type: "error", message: "Mật khẩu xác nhận không khớp." });
       return;
     }
     if (passwordForm.newPassword.length < 8) {
-      setNotice({ type: "error", message: "Mật khẩu mới cần ít nhất 8 ký tự." });
+      setNotice({
+        type: "error",
+        message: "Mật khẩu mới cần ít nhất 8 ký tự.",
+      });
       return;
     }
 
@@ -269,13 +336,16 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
     try {
       const data = await changePassword(accessToken, {
         currentPassword: passwordForm.currentPassword,
+        otp: passwordForm.otp.trim(),
         newPassword: passwordForm.newPassword,
       });
       setPasswordForm({
         currentPassword: "",
+        otp: "",
         newPassword: "",
         confirmPassword: "",
       });
+      setPasswordOtpSent(false);
       setNotice({
         type: "success",
         message: data?.message || "Đã đổi mật khẩu.",
@@ -287,6 +357,31 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
       });
     } finally {
       setSavingPassword(false);
+    }
+  }
+
+  async function handleSendPasswordOtp() {
+    if (!profileEmail) {
+      setNotice({ type: "error", message: "Không tìm thấy email tài khoản." });
+      return;
+    }
+
+    setPasswordOtpSending(true);
+    setNotice(null);
+    try {
+      await forgotPassword(profileEmail);
+      setPasswordOtpSent(true);
+      setNotice({
+        type: "success",
+        message: `Mã OTP đã được gửi đến ${profileEmail}.`,
+      });
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message: getErrorMessage(error, "Không gửi được OTP."),
+      });
+    } finally {
+      setPasswordOtpSending(false);
     }
   }
 
@@ -340,9 +435,9 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
 
   return (
     <section className="grid gap-6 lg:grid-cols-[260px_1fr]">
-      <aside className="h-max rounded-lg bg-[#f1f2fb] p-5">
+      <aside className="h-max rounded-2xl bg-[#f1f2fb] p-5 shadow-sm">
         <p className="mb-5 px-3 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-500">
-          Account Settings
+          Cài đặt tài khoản
         </p>
         <nav className="space-y-2">
           {navItems.map((item) => (
@@ -352,7 +447,7 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
               onClick={() => setActiveTab(item.id)}
               className={`flex w-full items-center gap-3 rounded-md px-4 py-3 text-left text-sm font-bold transition ${
                 activeTab === item.id
-                  ? "bg-[#dfe2ee] text-[#075bd8]"
+                  ? "bg-white text-[#075bd8] shadow-sm"
                   : "text-slate-600 hover:bg-white/70"
               }`}
             >
@@ -369,17 +464,17 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
         <header className="mb-7">
           <h2 className="text-4xl font-extrabold tracking-tight text-slate-950">
             {activeTab === "profile"
-              ? "Profile Info"
+              ? "Thông tin cá nhân"
               : activeTab === "security"
-                ? "Security"
-                : "Addresses"}
+                ? "Bảo mật"
+                : "Địa chỉ"}
           </h2>
           <p className="mt-2 text-sm text-slate-600">
             {activeTab === "profile"
-              ? "Update your personal details and how others see you on the platform."
+              ? "Cập nhật thông tin cá nhân và cách hiển thị của bạn trên hệ thống."
               : activeTab === "security"
-                ? "Change your password through auth-service."
-                : "Save your delivery address to the address table in user-service."}
+                ? "Gửi OTP để xác nhận rồi mới đổi mật khẩu mới."
+                : "Lưu địa chỉ nhận hàng vào user-service."}
           </p>
         </header>
 
@@ -414,19 +509,23 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
                   </div>
                 )}
                 <span className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full bg-[#075bd8] text-white">
-                  <span className="material-symbols-outlined text-lg">edit</span>
+                  <span className="material-symbols-outlined text-lg">
+                    edit
+                  </span>
                 </span>
               </div>
               <div className="min-w-0">
                 <p className="text-lg font-extrabold text-slate-950">
-                  Your Profile Picture
+                  Ảnh đại diện của bạn
                 </p>
                 <p className="mt-1 text-sm text-slate-600">
-                  JPG, GIF or PNG. Max size of 2MB
+                  JPG, GIF hoặc PNG. Kích thước tối đa 2MB
                 </p>
                 <div className="mt-4 flex flex-wrap gap-3">
-                  <label className="inline-flex cursor-pointer items-center justify-center rounded-md bg-[#edf0f7] px-4 py-2 text-sm font-extrabold text-slate-900 transition hover:bg-[#e2e6f1]">
-                    Upload New
+                  <label
+                    className={`${secondaryButtonClass} inline-flex cursor-pointer items-center justify-center`}
+                  >
+                    Tải ảnh mới
                     <input
                       type="file"
                       accept="image/*"
@@ -446,65 +545,84 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
                       type="button"
                       onClick={handleSaveAvatar}
                       disabled={savingAvatar}
-                      className="rounded-md bg-[#075bd8] px-4 py-2 text-sm font-extrabold text-white disabled:opacity-60"
+                      className={secondaryButtonClass}
                     >
-                      {savingAvatar ? "Uploading..." : "Save Photo"}
+                      {savingAvatar ? "Đang tải..." : "Lưu ảnh"}
                     </button>
                   ) : null}
                   <button
                     type="button"
                     onClick={handleDeleteAvatar}
-                    disabled={deletingAvatar || (!profile?.avatarUrl && !avatarPreview)}
-                    className="rounded-md px-4 py-2 text-sm font-extrabold text-red-600 disabled:opacity-50"
+                    disabled={
+                      deletingAvatar || (!profile?.avatarUrl && !avatarPreview)
+                    }
+                    className={dangerButtonClass}
                   >
-                    {deletingAvatar ? "Removing..." : "Remove"}
+                    {deletingAvatar ? "Đang xóa..." : "Xóa ảnh"}
                   </button>
                 </div>
               </div>
             </div>
 
             <div className="grid gap-5 md:grid-cols-2">
-              <ProfileField label="Full Name">
+              <ProfileField label="Họ và tên">
                 <input
+                  type="text"
                   value={profileForm.fullName}
-                  onChange={(event) => setProfileValue("fullName", event.target.value)}
-                  className="profile-input"
+                  name="fullName"
+                  autoComplete="off"
+                  onChange={(event) =>
+                    setProfileValue("fullName", event.target.value)
+                  }
+                  onFocus={() => setEditingProfile(true)}
+                  onBlur={() => setEditingProfile(false)}
+                  className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
                 />
               </ProfileField>
-              <ProfileField label="Professional Title">
+              <ProfileField label="Vai trò">
                 <input
                   value={profile?.role || ""}
                   disabled
-                  className="profile-input text-slate-500"
+                  className="w-full rounded-[14px] border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500 outline-none cursor-not-allowed"
                 />
               </ProfileField>
-              <ProfileField label="Email Address" className="md:col-span-2">
+              <ProfileField label="Email" className="md:col-span-2">
                 <input
                   type="email"
                   value={profile?.email || ""}
                   disabled
-                  className="profile-input text-slate-500"
+                  className="w-full rounded-[14px] border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500 outline-none cursor-not-allowed"
                 />
               </ProfileField>
-              <ProfileField label="Phone Number">
+              <ProfileField label="Số điện thoại">
                 <input
+                  type="text"
                   value={profileForm.phone}
-                  onChange={(event) => setProfileValue("phone", event.target.value)}
-                  className="profile-input"
+                  name="phone"
+                  autoComplete="off"
+                  onChange={(event) =>
+                    setProfileValue("phone", event.target.value)
+                  }
+                  onFocus={() => setEditingProfile(true)}
+                  onBlur={() => setEditingProfile(false)}
+                  className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
                   placeholder="+84 ..."
                 />
               </ProfileField>
-              <ProfileField label="Timezone">
-                <select disabled className="profile-input text-slate-500">
+              <ProfileField label="Múi giờ">
+                <select
+                  disabled
+                  className="w-full rounded-[14px] border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-500 outline-none cursor-not-allowed"
+                >
                   <option>Asia/Saigon (ICT)</option>
                 </select>
               </ProfileField>
             </div>
 
             <FormActions
-              saving={savingProfile || loading}
-              saveLabel="Save Changes"
-              savingLabel="Saving..."
+              saving={savingProfile}
+              saveLabel="Lưu thay đổi"
+              savingLabel="Đang lưu..."
               onDiscard={() => {
                 setProfileForm({
                   fullName: profile?.fullName || "",
@@ -519,77 +637,139 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
         {activeTab === "security" && (
           <form
             onSubmit={handleChangePassword}
-            className="max-w-3xl rounded-lg bg-white p-8 shadow-sm"
+            className="max-w-3xl rounded-2xl bg-white p-8 shadow-sm"
           >
+            <div className="mb-6 rounded-2xl bg-slate-50 p-5">
+              <p className="text-sm font-bold text-slate-700">
+                Email xác nhận:{" "}
+                <span className="text-slate-950">
+                  {profileEmail || "Chưa có email"}
+                </span>
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                Bấm gửi OTP, sau đó nhập mã OTP và mật khẩu mới để hoàn tất.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleSendPasswordOtp}
+                  disabled={passwordOtpSending || !profileEmail}
+                  className={primaryButtonClass}
+                >
+                  {passwordOtpSending
+                    ? "Đang gửi OTP..."
+                    : passwordOtpSent
+                      ? "Gửi lại OTP"
+                      : "Gửi OTP"}
+                </button>
+                {passwordOtpSent ? (
+                  <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-700">
+                    OTP đã được gửi
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
             <div className="grid gap-5">
-              <ProfileField label="Current Password">
+              <ProfileField label="Mật khẩu hiện tại">
                 <input
                   type="password"
                   value={passwordForm.currentPassword}
+                  name="currentPassword"
+                  autoComplete="off"
                   onChange={(event) =>
                     setPasswordForm((prev) => ({
                       ...prev,
                       currentPassword: event.target.value,
                     }))
                   }
-                  className="profile-input"
+                  onFocus={() => setEditingProfile(true)}
+                  onBlur={() => setEditingProfile(false)}
+                  className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
                 />
               </ProfileField>
-              <ProfileField label="New Password">
+              <ProfileField label="Mã OTP">
+                <input
+                  type="text"
+                  value={passwordForm.otp}
+                  name="otp"
+                  autoComplete="off"
+                  onChange={(event) =>
+                    setPasswordForm((prev) => ({
+                      ...prev,
+                      otp: event.target.value,
+                    }))
+                  }
+                  onFocus={() => setEditingProfile(true)}
+                  onBlur={() => setEditingProfile(false)}
+                  className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
+                  placeholder="Nhập mã OTP 6 chữ số"
+                />
+              </ProfileField>
+              <ProfileField label="Mật khẩu mới">
                 <input
                   type="password"
                   value={passwordForm.newPassword}
+                  name="newPassword"
+                  autoComplete="off"
                   onChange={(event) =>
                     setPasswordForm((prev) => ({
                       ...prev,
                       newPassword: event.target.value,
                     }))
                   }
-                  className="profile-input"
+                  onFocus={() => setEditingProfile(true)}
+                  onBlur={() => setEditingProfile(false)}
+                  className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
                 />
               </ProfileField>
-              <ProfileField label="Confirm New Password">
+              <ProfileField label="Xác nhận mật khẩu mới">
                 <input
                   type="password"
                   value={passwordForm.confirmPassword}
+                  name="confirmPassword"
+                  autoComplete="off"
                   onChange={(event) =>
                     setPasswordForm((prev) => ({
                       ...prev,
                       confirmPassword: event.target.value,
                     }))
                   }
-                  className="profile-input"
+                  className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
                 />
               </ProfileField>
             </div>
             <FormActions
               saving={savingPassword}
-              saveLabel="Update Password"
-              savingLabel="Updating..."
-              onDiscard={() =>
+              saveLabel="Xác nhận đổi mật khẩu"
+              savingLabel="Đang xử lý..."
+              onDiscard={() => {
                 setPasswordForm({
                   currentPassword: "",
+                  otp: "",
                   newPassword: "",
                   confirmPassword: "",
-                })
-              }
+                });
+                setPasswordOtpSent(false);
+                setNotice(null);
+              }}
             />
           </form>
         )}
 
         {activeTab === "addresses" && (
           <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-            <section className="rounded-lg bg-white p-5 shadow-sm">
+            <section className="rounded-2xl bg-white p-5 shadow-sm">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <h3 className="text-lg font-extrabold text-slate-950">
-                  Saved Addresses
+                  Địa chỉ đã lưu
                 </h3>
                 <button
                   type="button"
                   onClick={startNewAddress}
-                  className="rounded-md bg-[#edf0f7] px-3 py-2 text-sm font-extrabold text-[#075bd8]"
+                  className={secondaryButtonClass}
                 >
-                  Add New
+                  Thêm mới
                 </button>
               </div>
               <div className="space-y-3">
@@ -617,7 +797,7 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
                             </p>
                             {address.defaultAddress ? (
                               <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-700">
-                                Default
+                                Mặc định
                               </span>
                             ) : null}
                           </div>
@@ -631,7 +811,7 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
                           </p>
                         </div>
                         <span className="rounded-md bg-white px-2 py-1 text-xs font-bold text-slate-500">
-                          {address.label || "Address"}
+                          {address.label || "Địa chỉ"}
                         </span>
                       </div>
                     </button>
@@ -642,54 +822,92 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
 
             <form
               onSubmit={handleSaveAddress}
-              className="rounded-lg bg-white p-8 shadow-sm"
+              className="rounded-2xl bg-white p-8 shadow-sm"
             >
               <div className="grid gap-5 md:grid-cols-2">
-                <ProfileField label="Recipient Name">
+                <ProfileField label="Người nhận">
                   <input
+                    type="text"
                     value={addressForm.recipientName}
+                    name="recipientName"
+                    autoComplete="off"
                     onChange={(event) =>
                       setAddressValue("recipientName", event.target.value)
                     }
-                    className="profile-input"
+                    onFocus={() => setEditingAddress(true)}
+                    onBlur={() => setEditingAddress(false)}
+                    className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
                   />
                 </ProfileField>
-                <ProfileField label="Phone">
+                <ProfileField label="Số điện thoại">
                   <input
+                    type="tel"
                     value={addressForm.phone}
-                    onChange={(event) => setAddressValue("phone", event.target.value)}
-                    className="profile-input"
+                    name="phone"
+                    autoComplete="off"
+                    onChange={(event) =>
+                      setAddressValue("phone", event.target.value)
+                    }
+                    onFocus={() => setEditingAddress(true)}
+                    onBlur={() => setEditingAddress(false)}
+                    className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
                   />
                 </ProfileField>
-                <ProfileField label="Label">
+                <ProfileField label="Nhãn">
                   <input
+                    type="text"
                     value={addressForm.label}
-                    onChange={(event) => setAddressValue("label", event.target.value)}
-                    className="profile-input"
-                    placeholder="Home, Office..."
+                    name="label"
+                    autoComplete="off"
+                    onChange={(event) =>
+                      setAddressValue("label", event.target.value)
+                    }
+                    onFocus={() => setEditingAddress(true)}
+                    onBlur={() => setEditingAddress(false)}
+                    className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
+                    placeholder="Nhà, Văn phòng..."
                   />
                 </ProfileField>
-                <ProfileField label="City">
+                <ProfileField label="Tỉnh / Thành phố">
                   <input
+                    type="text"
                     value={addressForm.city}
-                    onChange={(event) => setAddressValue("city", event.target.value)}
-                    className="profile-input"
+                    name="city"
+                    autoComplete="off"
+                    onChange={(event) =>
+                      setAddressValue("city", event.target.value)
+                    }
+                    onFocus={() => setEditingAddress(true)}
+                    onBlur={() => setEditingAddress(false)}
+                    className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
                   />
                 </ProfileField>
-                <ProfileField label="Street" className="md:col-span-2">
+                <ProfileField label="Đường / Số nhà" className="md:col-span-2">
                   <input
+                    type="text"
                     value={addressForm.street}
-                    onChange={(event) => setAddressValue("street", event.target.value)}
-                    className="profile-input"
+                    name="street"
+                    autoComplete="off"
+                    onChange={(event) =>
+                      setAddressValue("street", event.target.value)
+                    }
+                    onFocus={() => setEditingAddress(true)}
+                    onBlur={() => setEditingAddress(false)}
+                    className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
                   />
                 </ProfileField>
-                <ProfileField label="District" className="md:col-span-2">
+                <ProfileField label="Quận / Huyện" className="md:col-span-2">
                   <input
+                    type="text"
                     value={addressForm.district}
+                    name="district"
+                    autoComplete="off"
                     onChange={(event) =>
                       setAddressValue("district", event.target.value)
                     }
-                    className="profile-input"
+                    onFocus={() => setEditingAddress(true)}
+                    onBlur={() => setEditingAddress(false)}
+                    className="pointer-events-auto w-full rounded-[14px] border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition-all focus:border-blue-600 focus:shadow-[0_0_0_4px_rgba(7,91,216,0.14)] cursor-text"
                   />
                 </ProfileField>
               </div>
@@ -703,7 +921,7 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
                   }
                   className="h-4 w-4"
                 />
-                Set as default address
+                Đặt làm địa chỉ mặc định
               </label>
 
               <div className="mt-8 flex flex-wrap items-center justify-end gap-3">
@@ -712,28 +930,28 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
                     type="button"
                     onClick={() => handleDeleteAddress(addressForm.id)}
                     disabled={savingAddress}
-                    className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-extrabold text-rose-700 disabled:opacity-60"
+                    className={dangerButtonClass}
                   >
-                    Delete
+                    Xóa
                   </button>
                 ) : null}
                 <button
                   type="button"
                   onClick={startNewAddress}
-                  className="rounded-md px-4 py-3 text-sm font-extrabold text-[#075bd8] transition hover:bg-[#edf0f7]"
+                  className={secondaryButtonClass}
                 >
-                  Clear Form
+                  Xóa form
                 </button>
                 <button
                   type="submit"
                   disabled={savingAddress}
-                  className="rounded-md bg-[#a84600] px-7 py-3 text-sm font-extrabold text-white transition hover:bg-[#8f3900] disabled:cursor-not-allowed disabled:opacity-60"
+                  className={primaryButtonClass}
                 >
                   {savingAddress
-                    ? "Saving..."
+                    ? "Đang lưu..."
                     : addressForm.id
-                      ? "Update Address"
-                      : "Create Address"}
+                      ? "Cập nhật địa chỉ"
+                      : "Tạo địa chỉ"}
                 </button>
               </div>
             </form>
@@ -746,7 +964,7 @@ export default function AccountProfilePage({ user, onUserUpdate }) {
 
 function ProfileField({ label, className = "", children }) {
   return (
-    <label className={`block ${className}`}>
+    <label className={`pointer-events-auto block ${className}`}>
       <span className="mb-2 block text-xs font-extrabold uppercase tracking-[0.12em] text-slate-500">
         {label}
       </span>
@@ -761,15 +979,11 @@ function FormActions({ saving, saveLabel, savingLabel, onDiscard }) {
       <button
         type="button"
         onClick={onDiscard}
-        className="rounded-md px-4 py-3 text-sm font-extrabold text-[#075bd8] transition hover:bg-[#edf0f7]"
+        className={secondaryButtonClass}
       >
-        Discard Changes
+        Hủy thay đổi
       </button>
-      <button
-        type="submit"
-        disabled={saving}
-        className="rounded-md bg-[#a84600] px-7 py-3 text-sm font-extrabold text-white transition hover:bg-[#8f3900] disabled:cursor-not-allowed disabled:opacity-60"
-      >
+      <button type="submit" disabled={saving} className={primaryButtonClass}>
         {saving ? savingLabel : saveLabel}
       </button>
     </div>

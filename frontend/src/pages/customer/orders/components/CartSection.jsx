@@ -9,7 +9,6 @@ function formatAddress(address) {
 
 export default function CartSection({
   userId,
-  guestToken,
   products,
   cartLoading,
   cart,
@@ -39,8 +38,6 @@ export default function CartSection({
   );
 
   const canCheckout = Boolean(userId) && cart.length > 0 && checkout.addressId;
-  const isGuest = !userId && guestToken;
-  const hasCart = Boolean(userId) || isGuest;
 
   const handleSubmit = async (event) => {
     await onCheckout(event, { paymentMethod });
@@ -68,11 +65,7 @@ export default function CartSection({
             </div>
           </div>
 
-          {!hasCart ? (
-            <div className="mt-6 rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
-              Ban can dang nhap hoac tiep tuc mua sam de xem gio hang.
-            </div>
-          ) : cartLoading ? (
+          {cartLoading ? (
             <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-10 text-center text-sm text-slate-500">
               Dang tai gio hang...
             </div>
@@ -270,7 +263,7 @@ export default function CartSection({
               />
             </div>
           </section>
-        ) : isGuest ? (
+        ) : cart.length > 0 ? (
           <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-center">
             <p className="text-sm text-amber-800">
               Hay dang nhap de chon dia chi va thanh toan.
@@ -362,7 +355,7 @@ export default function CartSection({
               <span>Thong tin thanh toan duoc tao qua payment-service</span>
             </div>
           </>
-        ) : isGuest ? (
+        ) : cart.length > 0 ? (
           <div className="rounded-3xl border border-blue-200 bg-blue-50 p-6 text-center">
             <p className="text-sm text-blue-800">
               Gio hang tam thoi se duoc dong bo khi ban dang nhap.

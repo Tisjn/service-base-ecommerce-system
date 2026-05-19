@@ -104,6 +104,9 @@ router.put(
     body("currentPassword")
       .notEmpty()
       .withMessage("Mat khau hien tai khong duoc de trong"),
+    body("otp")
+      .isLength({ min: 6, max: 6 })
+      .withMessage("OTP phải gồm 6 chữ số"),
     body("newPassword")
       .isLength({ min: 8 })
       .withMessage("Mat khau moi phai co it nhat 8 ky tu"),

@@ -24,7 +24,7 @@ public class NotificationHandler {
     public void handlePaymentProcessed(PaymentProcessedEvent event) {
         logger.info("NotificationHandler received PaymentProcessed for orderId={}", event.getOrderId());
         orderService.confirmOrder(event.getOrderId(), event.getPaymentId());
-        cartService.clearCart(event.getUserId());
+        cartService.clearCart(String.valueOf(event.getUserId()));
         logger.info("Order confirmed and cart cleared for orderId={}, userId={}", event.getOrderId(),
                 event.getUserId());
         logger.info("Simulated notification sent to userId={} for orderId={}", event.getUserId(), event.getOrderId());

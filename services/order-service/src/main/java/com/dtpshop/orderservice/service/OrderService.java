@@ -38,6 +38,7 @@ public class OrderService {
     private final PaymentServiceClient paymentServiceClient;
     private final ProductCommentRepository productCommentRepository;
     private final OrderWebSocketNotifier orderWebSocketNotifier;
+    private final OrderEmailService orderEmailService;
 
     @Autowired
     public OrderService(OrderRepository orderRepository,
@@ -46,7 +47,8 @@ public class OrderService {
             ProductServiceClient productServiceClient,
             PaymentServiceClient paymentServiceClient,
             ProductCommentRepository productCommentRepository,
-            OrderWebSocketNotifier orderWebSocketNotifier) {
+            OrderWebSocketNotifier orderWebSocketNotifier,
+            OrderEmailService orderEmailService) {
         this.orderRepository = orderRepository;
         this.eventPublisherService = eventPublisherService;
         this.cartService = cartService;
@@ -54,20 +56,18 @@ public class OrderService {
         this.paymentServiceClient = paymentServiceClient;
         this.productCommentRepository = productCommentRepository;
         this.orderWebSocketNotifier = orderWebSocketNotifier;
+        this.orderEmailService = orderEmailService;
     }
 
     public OrderService(OrderRepository orderRepository,
             EventPublisherService eventPublisherService,
             CartService cartService) {
-        this(orderRepository, eventPublisherService, cartService, null, null, null, null);
+        this(orderRepository, eventPublisherService, cartService, null, null, null, null, null);
     }
 
     @Transactional
-    public Order createOrder(Long userId, OrderRequestDto requestDto) {
-        List<CartItemDto> cartItems = productServiceClient == null ? List.of() : productServiceClient.getCart(userId);
-        if (cartItems.isEmpty()) {
-            cartItems = cartService.getCart(userId);
-        }
+    public Order createOrder(Long userId, String cartKey, String customerEmail, OrderRequestDto requestDto) {
+        List<CartItemDto> cartItems = cartService.getCart(cartKey);
         if (cartItems.isEmpty()) {
             throw new IllegalStateException("Giỏ hàng trống");
         }
@@ -149,9 +149,11 @@ public class OrderService {
             if (!reserved) {
                 throw new IllegalStateException("Không đủ tồn kho để thực hiện đơn hàng.");
             }
-            productServiceClient.clearCart(userId);
         }
-        cartService.clearCart(userId);
+        cartService.clearCart(cartKey);
+        if (orderEmailService != null) {
+            orderEmailService.sendOrderPlacedEmail(customerEmail, pendingOrder);
+        }
         return order;
     }
 

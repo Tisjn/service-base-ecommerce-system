@@ -4,6 +4,7 @@ import Register from "./Register";
 import ForgotPassword from "./ForgotPassword";
 import VerifyOTP from "./VerifyOTP";
 import ResetPassword from "./ResetPassword";
+import BrandLogo from "../../components/BrandLogo.jsx";
 
 function LoginPage({ onLogin, onCancel }) {
   const [mode, setMode] = useState("login");
@@ -110,13 +111,13 @@ function LoginPage({ onLogin, onCancel }) {
     <main className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-7xl px-6 py-6 lg:px-8">
         <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="text-3xl font-black tracking-tight text-slate-950">
-              DTPShop
-            </div>
+          <div className="flex flex-col gap-3">
+            <BrandLogo className="h-24 w-full max-w-[560px] object-contain object-left sm:h-28" />
+            <div>
             <p className="mt-2 text-sm text-slate-700">
               Nền tảng thương mại điện tử dành cho trải nghiệm mua sắm hiện đại.
             </p>
+            </div>
           </div>
         </header>
 
@@ -127,7 +128,7 @@ function LoginPage({ onLogin, onCancel }) {
                 Giải pháp bảo mật & tiện lợi
               </p>
               <h1 className="text-4xl font-bold leading-tight tracking-tight lg:text-5xl">
-                Xác thực chuyên nghiệp cho DTPShop.
+                Xác thực chuyên nghiệp cho thương hiệu của bạn.
               </h1>
               <p className="max-w-2xl text-base leading-8 text-sky-100/90">
                 Đăng nhập nhanh, đăng ký an toàn và đặt lại mật khẩu qua OTP —
@@ -214,7 +215,7 @@ function LoginPage({ onLogin, onCancel }) {
 
         <footer className="mt-10 border-t border-slate-200 pt-6 text-sm text-slate-500">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <span>DTPShop © 2026</span>
+            <span>© 2026</span>
             <div className="flex flex-wrap gap-4">
               <a href="#" className="hover:text-slate-900 transition-colors">
                 Chính sách

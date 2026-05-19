@@ -9,6 +9,8 @@ function normalizeRoom(room) {
   return {
     roomId: room.roomId,
     customerId: room.customerId,
+    customerEmail: room.customerEmail || "",
+    customerName: room.customerName || room.customerFullName || "",
     adminId: room.adminId || null,
     status: room.status,
     createdAt: room.createdAt,
@@ -35,9 +37,9 @@ async function createRoom(user) {
     throw new HttpError(400, "Admin khong can tao phong chat customer");
   }
 
-  const activeRoom = await roomRepository.findActiveByCustomer(user.userId);
-  if (activeRoom) {
-    return normalizeRoom(activeRoom);
+  const latestRoom = await roomRepository.findLatestByCustomer(user.userId);
+  if (latestRoom) {
+    return normalizeRoom(latestRoom);
   }
 
   const now = new Date().toISOString();
@@ -77,7 +79,22 @@ async function closeRoom(roomId, user) {
   return normalizeRoom(await roomRepository.markClosed(roomId));
 }
 
-async function saveMessage({ roomId, user, message, type = "text", fileUrl }) {
+async function reopenRoom(roomId, user) {
+  if (!isAdmin(user)) {
+    throw new HttpError(403, "Chi admin moi co the mo lai phong chat");
+  }
+  await requireRoomAccess(roomId, user);
+  return normalizeRoom(await roomRepository.reopenRoom(roomId));
+}
+
+async function saveMessage({
+  roomId,
+  user,
+  message,
+  type = "text",
+  fileUrl,
+  mimeType,
+}) {
   const room = await requireRoomAccess(roomId, user);
   if (room.status === "closed") {
     throw new HttpError(400, "Phong chat da dong");
@@ -104,6 +121,7 @@ async function saveMessage({ roomId, user, message, type = "text", fileUrl }) {
     message: cleanMessage,
     messageType: type || "text",
     fileUrl: fileUrl || null,
+    mimeType: mimeType || (type === "image" ? "image/*" : null),
     timestamp,
   };
 
@@ -118,6 +136,7 @@ async function saveMessage({ roomId, user, message, type = "text", fileUrl }) {
     message: item.message,
     type: item.messageType,
     fileUrl: item.fileUrl,
+    mimeType: item.mimeType,
     timestamp: item.timestamp,
   };
 }
@@ -139,6 +158,7 @@ async function listMessages(roomId, user, query) {
       message: item.message,
       type: item.messageType,
       fileUrl: item.fileUrl,
+      mimeType: item.mimeType || null,
       timestamp: item.timestamp,
     })),
     nextCursor: result.nextCursor,
@@ -153,5 +173,6 @@ module.exports = {
   listMessages,
   listRooms,
   requireRoomAccess,
+  reopenRoom,
   saveMessage,
 };

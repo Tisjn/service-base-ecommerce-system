@@ -2,12 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   closeChatRoom,
   createChatSocket,
+  emitChatEvent,
+  emitChatEventNoAck,
   getChatRooms,
   getRoomMessages,
-  joinChatRoom,
+  reopenChatRoom,
   resolveAbsoluteChatUrl,
   uploadChatFile,
 } from "../../../api/chatApi";
+import BrandLogo from "../../../components/BrandLogo.jsx";
 
 function messageKey(message) {
   return message?.id || `${message?.senderId}-${message?.timestamp}`;
@@ -23,29 +26,50 @@ function formatTime(value) {
   });
 }
 
+function isImageMessage(message) {
+  const fileUrl = String(message?.fileUrl || "");
+  const mimeType = String(message?.mimeType || "");
+  return (
+    message?.type === "image" ||
+    mimeType.startsWith("image/") ||
+    /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(fileUrl)
+  );
+}
+
 export default function AdminSupportPage({ user }) {
   const [rooms, setRooms] = useState([]);
   const [selectedRoomId, setSelectedRoomId] = useState("");
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
-  const [statusFilter, setStatusFilter] = useState("active");
+  const [statusFilter, setStatusFilter] = useState("");
   const [loadingRooms, setLoadingRooms] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [notice, setNotice] = useState("");
   const [typingUser, setTypingUser] = useState("");
+  const [sending, setSending] = useState(false);
   const socketRef = useRef(null);
   const bottomRef = useRef(null);
   const typingTimerRef = useRef(null);
+  const localTypingTimerRef = useRef(null);
+  const selectedRoomIdRef = useRef(selectedRoomId);
+  const statusFilterRef = useRef(statusFilter);
 
   const userId = String(user?.id || user?.userId || user?.accountId || "");
-  const selectedRoom = rooms.find((room) => room.roomId === selectedRoomId) || null;
+  const selectedRoom =
+    rooms.find((room) => room.roomId === selectedRoomId) || null;
+  const displayedRooms = useMemo(
+    () =>
+      statusFilter
+        ? rooms.filter((room) => room.status === statusFilter)
+        : rooms,
+    [rooms, statusFilter],
+  );
 
   const roomStats = useMemo(
     () => ({
       total: rooms.length,
       active: rooms.filter((room) => room.status === "active").length,
       closed: rooms.filter((room) => room.status === "closed").length,
-      unassigned: rooms.filter((room) => !room.adminId).length,
     }),
     [rooms],
   );
@@ -54,12 +78,32 @@ export default function AdminSupportPage({ user }) {
     setLoadingRooms(true);
     try {
       const data = await getChatRooms(statusFilter || undefined);
-      setRooms(Array.isArray(data) ? data : []);
-      if (!selectedRoomId && data?.[0]?.roomId) {
-        setSelectedRoomId(data[0].roomId);
+      const nextRooms = Array.isArray(data) ? data : [];
+      // keep only one room per customer (most recently updated)
+      const sorted = nextRooms
+        .slice()
+        .sort((a, b) =>
+          String(b.updatedAt || b.createdAt).localeCompare(
+            String(a.updatedAt || a.createdAt),
+          ),
+        );
+      const byCustomer = new Map();
+      for (const r of sorted) {
+        if (!byCustomer.has(String(r.customerId))) {
+          byCustomer.set(String(r.customerId), r);
+        }
+      }
+      const uniqueRooms = Array.from(byCustomer.values());
+      setRooms(uniqueRooms);
+      if (!selectedRoomId && nextRooms[0]?.roomId) {
+        setSelectedRoomId(nextRooms[0].roomId);
       }
     } catch (error) {
-      setNotice(error?.response?.data?.message || error.message || "Khong tai duoc room");
+      setNotice(
+        error?.response?.data?.message ||
+          error.message ||
+          "Khong tai duoc room",
+      );
     } finally {
       setLoadingRooms(false);
     }
@@ -69,16 +113,24 @@ export default function AdminSupportPage({ user }) {
     loadRooms();
   }, [loadRooms]);
 
+  // Create a single socket connection and use a ref to know which room is
+  // currently selected. This avoids handler closures reading stale
+  // `selectedRoomId` and prevents messages leaking between rooms when
+  // switching.
   useEffect(() => {
     const socket = createChatSocket();
     socketRef.current = socket;
 
     socket.on("connect", () => setNotice(""));
+
     socket.on("new_room", (room) => {
       setRooms((prev) =>
-        prev.some((item) => item.roomId === room.roomId) ? prev : [room, ...prev],
+        prev.some((item) => item.roomId === room.roomId)
+          ? prev
+          : [room, ...prev],
       );
     });
+
     socket.on("new_message", (message) => {
       setRooms((prev) =>
         prev.map((room) =>
@@ -92,27 +144,71 @@ export default function AdminSupportPage({ user }) {
             : room,
         ),
       );
-    });
-    socket.on("message", (message) => {
-      if (message.roomId === selectedRoomId) {
+      // Append only if admin currently viewing this room
+      if (message.roomId === selectedRoomIdRef.current) {
         appendMessage(message);
       }
     });
-    socket.on("typing", (event) => {
-      if (event.userType === "customer" && event.isTyping) {
-        setTypingUser("Khach hang dang nhap...");
-        window.clearTimeout(typingTimerRef.current);
-        typingTimerRef.current = window.setTimeout(() => setTypingUser(""), 1500);
+
+    socket.on("message", (message) => {
+      if (message.roomId === selectedRoomIdRef.current) {
+        appendMessage(message);
       }
     });
+
+    socket.on("typing", (event) => {
+      if (event.userType !== "customer") return;
+      window.clearTimeout(typingTimerRef.current);
+      if (event.isTyping) {
+        setTypingUser("Khach hang dang soan tin...");
+        typingTimerRef.current = window.setTimeout(
+          () => setTypingUser(""),
+          1800,
+        );
+      } else {
+        setTypingUser("");
+      }
+    });
+
     socket.on("room_closed", (room) => {
       setRooms((prev) =>
         prev.map((item) =>
           item.roomId === room.roomId ? { ...item, status: "closed" } : item,
         ),
       );
+      if (
+        statusFilterRef.current !== "closed" &&
+        selectedRoomIdRef.current === room.roomId
+      ) {
+        setStatusFilter("closed");
+      }
     });
-    socket.on("chat_error", (event) => setNotice(event.message || "Socket bi loi"));
+
+    socket.on("room_reopened", (room) => {
+      setRooms((prev) =>
+        prev.map((item) =>
+          item.roomId === room.roomId
+            ? {
+                ...item,
+                status: "active",
+                closedAt: null,
+                updatedAt: room.updatedAt,
+              }
+            : item,
+        ),
+      );
+      if (
+        statusFilterRef.current === "closed" &&
+        selectedRoomIdRef.current === room.roomId
+      ) {
+        setStatusFilter("");
+      }
+    });
+
+    socket.on("chat_error", (event) =>
+      setNotice(event.message || "Socket bi loi"),
+    );
+
     socket.connect();
 
     return () => {
@@ -120,7 +216,15 @@ export default function AdminSupportPage({ user }) {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [selectedRoomId]);
+  }, []);
+
+  const sendTypingState = useCallback((isTyping) => {
+    if (!selectedRoomIdRef.current) return;
+    socketRef.current?.emit("typing", {
+      roomId: selectedRoomIdRef.current,
+      isTyping,
+    });
+  }, []);
 
   useEffect(() => {
     if (!selectedRoomId) return undefined;
@@ -128,16 +232,25 @@ export default function AdminSupportPage({ user }) {
 
     async function loadMessages() {
       setLoadingMessages(true);
+      // Clear previous messages immediately to avoid showing the wrong room's
+      // messages while the new room history loads.
+      setMessages([]);
       try {
-        await joinChatRoom(selectedRoomId);
-        socketRef.current?.emit("join_room", { roomId: selectedRoomId });
+        await emitChatEventNoAck(socketRef.current, "join_room", {
+          roomId: selectedRoomId,
+        });
         const data = await getRoomMessages(selectedRoomId);
         if (!cancelled) {
           setMessages(data.messages || []);
+          setNotice("");
         }
       } catch (error) {
         if (!cancelled) {
-          setNotice(error?.response?.data?.message || error.message || "Khong tai duoc tin nhan");
+          setNotice(
+            error?.response?.data?.message ||
+              error.message ||
+              "Khong tai duoc tin nhan",
+          );
         }
       } finally {
         if (!cancelled) {
@@ -149,9 +262,20 @@ export default function AdminSupportPage({ user }) {
     loadMessages();
     return () => {
       cancelled = true;
+      window.clearTimeout(localTypingTimerRef.current);
+      sendTypingState(false);
       socketRef.current?.emit("leave_room", { roomId: selectedRoomId });
     };
+  }, [selectedRoomId, sendTypingState]);
+
+  // keep ref in sync so socket handlers can read current selected room
+  useEffect(() => {
+    selectedRoomIdRef.current = selectedRoomId;
   }, [selectedRoomId]);
+
+  useEffect(() => {
+    statusFilterRef.current = statusFilter;
+  }, [statusFilter]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -166,15 +290,48 @@ export default function AdminSupportPage({ user }) {
     });
   }
 
-  function sendMessage(event) {
+  const handleDraftChange = useCallback(
+    (value) => {
+      setDraft(value);
+      if (
+        !selectedRoomIdRef.current ||
+        !selectedRoom ||
+        selectedRoom.status === "closed"
+      ) {
+        return;
+      }
+
+      sendTypingState(true);
+      window.clearTimeout(localTypingTimerRef.current);
+      localTypingTimerRef.current = window.setTimeout(() => {
+        sendTypingState(false);
+      }, 1200);
+    },
+    [selectedRoom, sendTypingState],
+  );
+
+  async function sendMessage(event) {
     event.preventDefault();
-    if (!draft.trim() || !selectedRoom || selectedRoom.status === "closed") return;
-    socketRef.current?.emit("message", {
-      roomId: selectedRoom.roomId,
-      message: draft.trim(),
-      type: "text",
-    });
+    const text = draft.trim();
+    if (!text || !selectedRoom || selectedRoom.status === "closed" || sending)
+      return;
+    window.clearTimeout(localTypingTimerRef.current);
+    sendTypingState(false);
     setDraft("");
+    setSending(true);
+    try {
+      await emitChatEvent(socketRef.current, "message", {
+        roomId: selectedRoom.roomId,
+        message: text,
+        type: "text",
+      });
+      setNotice("");
+    } catch (error) {
+      setDraft(text);
+      setNotice(error.message || "Khong gui duoc tin nhan");
+    } finally {
+      setSending(false);
+    }
   }
 
   async function handleFileChange(event) {
@@ -183,14 +340,17 @@ export default function AdminSupportPage({ user }) {
     if (!file || !selectedRoom || selectedRoom.status === "closed") return;
     try {
       const uploaded = await uploadChatFile(file);
-      socketRef.current?.emit("message", {
+      await emitChatEvent(socketRef.current, "message", {
         roomId: selectedRoom.roomId,
         message: file.name,
         type: uploaded.type,
         fileUrl: uploaded.fileUrl,
+        mimeType: uploaded.mimeType,
       });
     } catch (error) {
-      setNotice(error?.response?.data?.message || error.message || "Upload that bai");
+      setNotice(
+        error?.response?.data?.message || error.message || "Upload that bai",
+      );
     }
   }
 
@@ -201,24 +361,55 @@ export default function AdminSupportPage({ user }) {
       setRooms((prev) =>
         prev.map((room) => (room.roomId === closed.roomId ? closed : room)),
       );
+      setSelectedRoomId(closed.roomId);
+      if (statusFilter !== "closed") {
+        setStatusFilter("closed");
+      }
     } catch (error) {
-      setNotice(error?.response?.data?.message || error.message || "Khong dong duoc room");
+      setNotice(
+        error?.response?.data?.message ||
+          error.message ||
+          "Khong dong duoc room",
+      );
+    }
+  }
+
+  async function handleReopenRoom() {
+    if (!selectedRoom) return;
+    try {
+      const reopened = await reopenChatRoom(selectedRoom.roomId);
+      setRooms((prev) =>
+        prev.map((room) => (room.roomId === reopened.roomId ? reopened : room)),
+      );
+      setSelectedRoomId(reopened.roomId);
+      if (statusFilter === "closed") {
+        setStatusFilter("");
+      }
+    } catch (error) {
+      setNotice(
+        error?.response?.data?.message ||
+          error.message ||
+          "Khong mo lai duoc room",
+      );
     }
   }
 
   return (
     <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-10">
       <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="mb-2 text-xs font-bold uppercase tracking-widest text-[#004ac6]">
-            DTPShop Support
-          </p>
-          <h2 className="text-4xl font-extrabold tracking-tight text-[#191b23] [font-family:Manrope,system-ui,sans-serif]">
-            Ho tro khach hang
-          </h2>
-          <p className="mt-2 text-[#434655]">
-            Quan ly cac phong chat realtime giua admin va customer.
-          </p>
+        <div className="flex min-w-0 flex-col gap-3">
+          <BrandLogo className="h-24 w-full max-w-140 object-contain object-left sm:h-28" />
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-[#ff4500]">
+              Support
+            </p>
+            <h2 className="font-[Manrope,system-ui,sans-serif] text-4xl font-extrabold tracking-tight text-[#111111]">
+              Ho tro khach hang
+            </h2>
+            <p className="mt-2 text-[#434655]">
+              Quan ly cac phong chat realtime giua admin va customer.
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap gap-3">
           <select
@@ -229,11 +420,14 @@ export default function AdminSupportPage({ user }) {
             }}
             className="azure-input w-44"
           >
-            <option value="active">Dang mo</option>
             <option value="closed">Da dong</option>
             <option value="">Tat ca</option>
           </select>
-          <button type="button" onClick={loadRooms} className="azure-button-muted">
+          <button
+            type="button"
+            onClick={loadRooms}
+            className="azure-button-muted"
+          >
             <span className="material-symbols-outlined text-lg">refresh</span>
             Tai lai
           </button>
@@ -243,53 +437,56 @@ export default function AdminSupportPage({ user }) {
       <div className="mb-6 grid gap-4 md:grid-cols-4">
         <SupportStat label="Tong room" value={roomStats.total} />
         <SupportStat label="Dang mo" value={roomStats.active} />
-        <SupportStat label="Chua co admin" value={roomStats.unassigned} />
         <SupportStat label="Da dong" value={roomStats.closed} />
       </div>
 
       {notice ? (
-        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="mb-4 rounded-xl border border-[#ffd6c4] bg-[#fff1e8] px-4 py-3 text-sm text-[#b83200]">
           {notice}
         </div>
       ) : null}
 
-      <section className="grid min-h-[680px] overflow-hidden rounded-2xl border border-[#c3c6d7]/20 bg-white shadow-sm lg:grid-cols-[360px_1fr]">
-        <aside className="border-b border-[#c3c6d7]/20 bg-[#f3f3fe] lg:border-b-0 lg:border-r">
-          <div className="border-b border-[#c3c6d7]/20 px-5 py-4">
-            <h3 className="font-extrabold text-[#191b23]">Phong chat</h3>
+      <section className="grid min-h-170 overflow-hidden rounded-3xl border border-[#ffd6c4] bg-white shadow-[0_16px_50px_-20px_rgba(255,69,0,0.16)] lg:grid-cols-[360px_1fr]">
+        <aside className="border-b border-[#ffd6c4] bg-[linear-gradient(180deg,#fff8f4,#fff1e8)] lg:border-b-0 lg:border-r">
+          <div className="border-b border-[#ffd6c4] px-5 py-4">
+            <h3 className="font-extrabold text-[#111111]">Phong chat</h3>
             <p className="mt-1 text-sm text-[#737686]">
-              {loadingRooms ? "Dang tai..." : `${rooms.length} cuoc hoi thoai`}
+              {loadingRooms
+                ? "Dang tai..."
+                : `${displayedRooms.length} cuoc hoi thoai`}
             </p>
           </div>
-          <div className="max-h-[620px] overflow-y-auto p-3">
-            {rooms.length === 0 ? (
+          <div className="max-h-155 overflow-y-auto p-3">
+            {displayedRooms.length === 0 ? (
               <p className="rounded-xl bg-white p-4 text-sm text-[#737686]">
                 Chua co phong chat phu hop.
               </p>
             ) : (
-              rooms.map((room) => (
+              displayedRooms.map((room) => (
                 <button
                   key={room.roomId}
                   type="button"
                   onClick={() => setSelectedRoomId(room.roomId)}
                   className={`mb-2 w-full rounded-xl border p-4 text-left transition ${
                     selectedRoomId === room.roomId
-                      ? "border-[#004ac6] bg-white shadow-sm"
+                      ? "border-[#ff4500] bg-white shadow-sm"
                       : "border-transparent bg-white/70 hover:bg-white"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <p className="truncate font-extrabold text-[#191b23]">
-                      Customer #{room.customerId}
+                    <p className="truncate font-extrabold text-[#111111]">
+                      {room.customerName ||
+                        room.customerEmail ||
+                        `Customer #${room.customerId}`}
                     </p>
                     <span
                       className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${
                         room.status === "active"
                           ? "bg-emerald-100 text-emerald-700"
-                          : "bg-slate-200 text-slate-600"
+                          : "bg-rose-100 text-rose-700"
                       }`}
                     >
-                      {room.status}
+                      {room.status === "active" ? "Đang mở" : "Đã đóng"}
                     </span>
                   </div>
                   <p className="mt-2 truncate text-sm text-[#434655]">
@@ -304,30 +501,48 @@ export default function AdminSupportPage({ user }) {
           </div>
         </aside>
 
-        <div className="flex min-h-[680px] flex-col">
-          <header className="flex items-center justify-between gap-4 border-b border-[#c3c6d7]/20 px-5 py-4">
+        <div className="flex h-150 flex-col">
+          <header className="flex items-center justify-between gap-4 border-b border-[#ffd6c4] px-5 py-4">
             <div className="min-w-0">
-              <h3 className="truncate font-extrabold text-[#191b23]">
-                {selectedRoom ? `Customer #${selectedRoom.customerId}` : "Chon room de chat"}
+              <h3 className="truncate font-extrabold text-[#111111]">
+                {selectedRoom
+                  ? `${selectedRoom.customerName || selectedRoom.customerEmail || `Customer #${selectedRoom.customerId}`}`
+                  : "Chon room de chat"}
               </h3>
               <p className="truncate text-sm text-[#737686]">
                 {typingUser || selectedRoom?.roomId || "Realtime Socket.io"}
               </p>
             </div>
             {selectedRoom ? (
-              <button
-                type="button"
-                onClick={handleCloseRoom}
-                disabled={selectedRoom.status === "closed"}
-                className="azure-button-muted disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined text-lg">lock</span>
-                Dong chat
-              </button>
+              <div className="flex items-center gap-2">
+                {selectedRoom.status === "closed" ? (
+                  <button
+                    type="button"
+                    onClick={handleReopenRoom}
+                    className="azure-button"
+                  >
+                    <span className="material-symbols-outlined text-lg">
+                      reply
+                    </span>
+                    Mở lại chat
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleCloseRoom}
+                    className="azure-button-muted"
+                  >
+                    <span className="material-symbols-outlined text-lg">
+                      lock
+                    </span>
+                    Đóng chat
+                  </button>
+                )}
+              </div>
             ) : null}
           </header>
 
-          <div className="flex-1 space-y-3 overflow-y-auto bg-[#faf8ff] px-5 py-5">
+          <div className="flex-1 space-y-3 overflow-y-auto bg-[radial-gradient(circle_at_top,#fff1e8,#ffffff_55%,#fff8f4_100%)] px-5 py-5">
             {loadingMessages ? (
               <p className="text-sm text-[#737686]">Dang tai lich su chat...</p>
             ) : messages.length === 0 ? (
@@ -346,18 +561,18 @@ export default function AdminSupportPage({ user }) {
                     <div
                       className={`max-w-[72%] rounded-2xl px-4 py-3 text-sm ${
                         mine
-                          ? "bg-[#004ac6] text-white"
-                          : "border border-[#c3c6d7]/25 bg-white text-[#191b23]"
+                          ? "bg-[#ff4500] text-white"
+                          : "border border-[#ffd6c4] bg-white text-[#111111]"
                       }`}
                     >
-                      {message.type === "image" && fileUrl ? (
+                      {isImageMessage(message) && fileUrl ? (
                         <img
                           src={fileUrl}
                           alt={message.message || "Chat image"}
                           className="mb-2 max-h-56 rounded-lg object-cover"
                         />
                       ) : null}
-                      {message.type === "file" && fileUrl ? (
+                      {!isImageMessage(message) && fileUrl ? (
                         <a
                           href={fileUrl}
                           target="_blank"
@@ -370,8 +585,12 @@ export default function AdminSupportPage({ user }) {
                           Tep dinh kem
                         </a>
                       ) : null}
-                      <p className="whitespace-pre-wrap break-words">{message.message}</p>
-                      <p className={`mt-1 text-[10px] ${mine ? "text-blue-100" : "text-[#737686]"}`}>
+                      <p className="whitespace-pre-wrap wrap-break-word">
+                        {message.message}
+                      </p>
+                      <p
+                        className={`mt-1 text-[10px] ${mine ? "text-[#ffe5d8]" : "text-[#737686]"}`}
+                      >
                         {formatTime(message.timestamp)}
                       </p>
                     </div>
@@ -379,27 +598,52 @@ export default function AdminSupportPage({ user }) {
                 );
               })
             )}
+            {typingUser ? (
+              <div className="flex justify-start">
+                <div className="flex items-center gap-2 rounded-2xl border border-[#ffd6c4] bg-white px-4 py-3 text-sm text-[#434655] shadow-sm">
+                  <span className="flex gap-1">
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-[#ff4500] [animation-delay:-0.2s]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-[#ff4500] [animation-delay:-0.1s]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-[#ff4500]" />
+                  </span>
+                  <span>{typingUser}</span>
+                </div>
+              </div>
+            ) : null}
             <div ref={bottomRef} />
           </div>
 
-          <form onSubmit={sendMessage} className="border-t border-[#c3c6d7]/20 p-4">
+          <form
+            onSubmit={sendMessage}
+            className="border-t border-[#ffd6c4] bg-white/95 p-4"
+          >
             <div className="flex items-end gap-3">
-              <label className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-lg bg-[#ededf9] text-[#434655] hover:bg-[#e1e2ed]">
+              <label className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-lg bg-[#fff1e8] text-[#ff4500] hover:bg-[#ffe5d8]">
                 <span className="material-symbols-outlined">attach_file</span>
-                <input type="file" className="hidden" onChange={handleFileChange} />
+                <input
+                  type="file"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
               </label>
               <textarea
                 rows="1"
                 value={draft}
-                onChange={(event) => {
-                  setDraft(event.target.value);
-                  socketRef.current?.emit("typing", {
-                    roomId: selectedRoom?.roomId,
-                    isTyping: true,
-                  });
+                onChange={(event) => handleDraftChange(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    if (!sending) {
+                      sendMessage(event);
+                    }
+                  }
+                }}
+                onBlur={() => {
+                  window.clearTimeout(localTypingTimerRef.current);
+                  sendTypingState(false);
                 }}
                 disabled={!selectedRoom || selectedRoom.status === "closed"}
-                className="min-h-11 flex-1 resize-none rounded-lg border border-[#c3c6d7]/45 px-4 py-3 text-sm text-[#191b23] outline-none focus:border-[#004ac6] focus:ring-4 focus:ring-[#004ac6]/10"
+                className="min-h-11 flex-1 resize-none rounded-lg border border-[#ffd6c4] px-4 py-3 text-sm text-[#111111] outline-none focus:border-[#ff4500] focus:ring-4 focus:ring-[#ff4500]/10"
                 placeholder={
                   selectedRoom?.status === "closed"
                     ? "Room da dong"
@@ -408,11 +652,18 @@ export default function AdminSupportPage({ user }) {
               />
               <button
                 type="submit"
-                disabled={!draft.trim() || !selectedRoom || selectedRoom.status === "closed"}
-                className="azure-button h-11 px-4 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={
+                  !draft.trim() ||
+                  !selectedRoom ||
+                  selectedRoom.status === "closed" ||
+                  sending
+                }
+                className="h-11 px-4 rounded-lg bg-[#ff4500] font-semibold text-white shadow-[0_12px_30px_-12px_rgba(255,69,0,0.7)] transition hover:bg-[#e63e00] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <span className="material-symbols-outlined text-lg">send</span>
-                Gui
+                <span className="material-symbols-outlined text-lg">
+                  {sending ? "hourglass_top" : "send"}
+                </span>
+                {sending ? "Dang gui" : "Gui"}
               </button>
             </div>
           </form>
@@ -424,11 +675,11 @@ export default function AdminSupportPage({ user }) {
 
 function SupportStat({ label, value }) {
   return (
-    <div className="rounded-xl border border-[#c3c6d7]/10 bg-white p-5 shadow-sm">
-      <p className="text-xs font-bold uppercase tracking-widest text-[#737686]">
+    <div className="rounded-2xl border border-[#ffd6c4] bg-white p-5 shadow-sm">
+      <p className="text-xs font-bold uppercase tracking-widest text-[#ff4500]">
         {label}
       </p>
-      <p className="mt-3 text-3xl font-extrabold text-[#191b23] [font-family:Manrope,system-ui,sans-serif]">
+      <p className="mt-3 text-3xl font-extrabold text-[#111111] font-[Manrope,system-ui,sans-serif]">
         {value}
       </p>
     </div>

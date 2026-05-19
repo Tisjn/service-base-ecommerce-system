@@ -50,10 +50,11 @@ class OrderServiceIntegrationTest {
 
     @Test
     void shouldCreatePendingCodOrderAndClearCartWithoutPublishingPaymentSaga() {
-        when(cartService.getCart(1L)).thenReturn(List.of(
+        when(cartService.getCart("1")).thenReturn(List.of(
                 new CartItemDto(100L, "Suitcase", 2, new BigDecimal("49.99"))));
 
         OrderRequestDto requestDto = new OrderRequestDto();
+        requestDto.setAddressId(10L);
         requestDto.setShippingAddress("123 Test Street");
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
             Order savedOrder = invocation.getArgument(0);
@@ -61,7 +62,7 @@ class OrderServiceIntegrationTest {
             return savedOrder;
         });
 
-        Order order = orderService.createOrder(1L, requestDto);
+        Order order = orderService.createOrder(1L, "1", "customer@example.com", requestDto);
 
         assertThat(order.getId()).isNotNull();
         assertThat(order.getTotalAmount()).isEqualByComparingTo(new BigDecimal("99.98"));
@@ -70,7 +71,7 @@ class OrderServiceIntegrationTest {
         assertThat(order.getItems()).hasSize(1);
 
         verify(orderRepository).save(any(Order.class));
-        verify(cartService).clearCart(1L);
+        verify(cartService).clearCart("1");
         verify(eventPublisherService, never()).publishOrderCreated(any());
     }
 

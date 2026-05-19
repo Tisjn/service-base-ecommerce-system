@@ -9,8 +9,38 @@ function getAuthHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function isRetriableRequest(options = {}) {
+  const method = String(options.method || "GET").toUpperCase();
+  return method === "GET" || method === "HEAD";
+}
+
+function wait(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 async function requestWithFallback(path, options = {}) {
-  return fetch(`${API_BASE_URL}${path}`, options);
+  const attempts = isRetriableRequest(options) ? 3 : 1;
+  let lastError;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const response = await fetch(`${API_BASE_URL}${path}`, options);
+      if (response.status >= 500 && attempt < attempts - 1) {
+        lastError = new Error(response.statusText || "Server error");
+        await wait(350 * (attempt + 1));
+        continue;
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (attempt >= attempts - 1) {
+        throw error;
+      }
+      await wait(350 * (attempt + 1));
+    }
+  }
+
+  throw lastError;
 }
 
 async function handleResponse(response) {

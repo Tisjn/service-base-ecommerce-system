@@ -31,7 +31,6 @@ const config = {
 const productApiPrefixes = [
   "/api/products",
   "/api/categories",
-  "/api/cart",
   "/api/product-images",
   "/api/inventory",
 ];

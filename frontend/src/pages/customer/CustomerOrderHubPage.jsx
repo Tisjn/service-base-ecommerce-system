@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getProfile, updateProfile } from "../../api/authApi";
 import { getUserAddresses } from "../../api/userApi";
 import { getCategories, getProducts } from "../../api/productApi";
@@ -11,25 +11,6 @@ import OrderCatalogPage from "./orders/pages/OrderCatalogPage";
 import OrderHistoryPage from "./orders/pages/OrderHistoryPage";
 import ProductDetailSection from "./orders/components/ProductDetailSection";
 import { getStatusLabel, sortOrdersNewestFirst } from "./orders/orderUtils";
-
-const GUEST_TOKEN_KEY = "guestToken";
-
-function getGuestToken() {
-  let token = localStorage.getItem(GUEST_TOKEN_KEY);
-  if (!token) {
-    token = orderApi.generateGuestToken();
-    localStorage.setItem(GUEST_TOKEN_KEY, token);
-  }
-  return token;
-}
-
-function clearGuestToken() {
-  localStorage.removeItem(GUEST_TOKEN_KEY);
-}
-
-function syncGuestTokenFromStorage() {
-  return localStorage.getItem(GUEST_TOKEN_KEY) || null;
-}
 
 function consolidateCartItems(items) {
   const map = new Map();
@@ -86,11 +67,7 @@ export default function CustomerOrderHubPage({ user }) {
   const [orders, setOrders] = useState([]);
   const [adminOrders, setAdminOrders] = useState([]);
   const [addresses, setAddresses] = useState([]);
-  const [guestToken, setGuestToken] = useState(() => {
-    const token = getGuestToken();
-    localStorage.setItem(GUEST_TOKEN_KEY, token);
-    return token;
-  });
+  const notifiedLoginUserRef = useRef(null);
   const [activeTab, setActiveTab] = useState("catalog");
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [search, setSearch] = useState("");
@@ -218,26 +195,14 @@ export default function CustomerOrderHubPage({ user }) {
   const loadCart = useCallback(async () => {
     setCartLoading(true);
     try {
-      if (!userId) {
-        // Guest: use guestToken to load cart from server
-        const token = guestToken || getGuestToken();
-        if (!guestToken) {
-          setGuestToken(token);
-        }
-        const data = await orderApi.getCart("guest", token);
-        setCart(Array.isArray(data) ? data : []);
-        return;
-      }
-
-      // Authenticated user: load cart from server
-      const data = await orderApi.getCart(userId);
+      const data = await orderApi.getCart();
       setCart(Array.isArray(data) ? data : []);
     } catch (error) {
       showNotification("error", error.message || "Không tải được giỏ hàng");
     } finally {
       setCartLoading(false);
     }
-  }, [userId, guestToken, showNotification]);
+  }, [showNotification]);
 
   const loadOrders = useCallback(async () => {
     if (!userId) {
@@ -304,21 +269,6 @@ export default function CustomerOrderHubPage({ user }) {
     }
   }, [isAdmin, showNotification]);
 
-  const mergeGuestCartToServer = useCallback(async () => {
-    if (!guestToken) {
-      return true; // No guest token, nothing to merge
-    }
-
-    try {
-      await orderApi.mergeGuestCart(guestToken);
-      console.log("Guest cart merged successfully");
-      return true; // Success
-    } catch (error) {
-      console.error("Failed to merge guest cart:", error);
-      return false; // Failed but don't throw
-    }
-  }, [guestToken]);
-
   useEffect(() => {
     loadCategories();
   }, [loadCategories]);
@@ -330,29 +280,22 @@ export default function CustomerOrderHubPage({ user }) {
   useEffect(() => {
     let cancelled = false;
 
-    const syncGuestCartAndLoad = async () => {
+    const syncSessionCartAndLoad = async () => {
       if (!userId) {
-        // Guest: load cart will handle guestToken
+        notifiedLoginUserRef.current = null;
         await loadCart();
         setOrders([]);
         return;
       }
-
-      // User logged in: merge guest cart if token exists
-      if (guestToken) {
-        const mergeSuccess = await mergeGuestCartToServer();
-        if (mergeSuccess) {
-          clearGuestToken();
-          setGuestToken(null);
-          showNotification(
-            "success",
-            "Giỏ hàng khách đã được đồng bộ vào tài khoản của bạn.",
-          );
-        } else {
-          if (!cancelled) {
-            console.error("Failed to merge guest cart");
-            showNotification("error", "Không đồng bộ được giỏ hàng khách.");
+      if (notifiedLoginUserRef.current !== userId) {
+        try {
+          const mergedCart = await orderApi.notifyCartOnLogin(userId);
+          notifiedLoginUserRef.current = userId;
+          if (!cancelled && Array.isArray(mergedCart)) {
+            setCart(mergedCart);
           }
+        } catch (error) {
+          showNotification("error", error.message || "Không đồng bộ được giỏ hàng.");
         }
       }
 
@@ -369,19 +312,17 @@ export default function CustomerOrderHubPage({ user }) {
       ]);
     };
 
-    syncGuestCartAndLoad();
+    syncSessionCartAndLoad();
 
     return () => {
       cancelled = true;
     };
   }, [
     isAdmin,
-    guestToken,
     loadAdminOrders,
     loadAddresses,
     loadCart,
     loadOrders,
-    mergeGuestCartToServer,
     showNotification,
     userId,
   ]);
@@ -428,30 +369,7 @@ export default function CustomerOrderHubPage({ user }) {
   async function handleAddToCart(product) {
     setUpdatingProductId(product.id);
     try {
-      if (!userId) {
-        // Guest: add to server cart with guestToken
-        const token = guestToken || getGuestToken();
-        if (!guestToken) {
-          setGuestToken(token);
-        }
-        await orderApi.addCartItem(
-          "guest",
-          {
-            productId: product.id,
-            productName: product.name,
-            quantity: 1,
-            price: product.price,
-            imageUrl: product.imageUrl || product.imageURL || null,
-          },
-          token,
-        );
-        await loadCart(); // Reload cart from server
-        showNotification("success", `Đã thêm ${product.name} vào giỏ hàng.`);
-        setActiveTab("cart");
-        return;
-      }
-
-      await orderApi.addCartItem(userId, {
+      await orderApi.addCartItem({
         productId: product.id,
         productName: product.name,
         quantity: 1,
@@ -479,27 +397,9 @@ export default function CustomerOrderHubPage({ user }) {
   }
 
   async function handleQuantityChange(productId, quantity) {
-    if (!userId) {
-      // Guest: update on server
-      const token = guestToken || getGuestToken();
-      if (!guestToken) {
-        setGuestToken(token);
-      }
-      setUpdatingProductId(productId);
-      try {
-        await orderApi.updateCartItem("guest", productId, quantity, token);
-        await loadCart();
-      } catch (error) {
-        showNotification("error", error.message || "Không cập nhật được giỏ");
-      } finally {
-        setUpdatingProductId(null);
-      }
-      return;
-    }
-
     setUpdatingProductId(productId);
     try {
-      await orderApi.updateCartItem(userId, productId, quantity);
+      await orderApi.updateCartItem(productId, quantity);
       await loadCart();
     } catch (error) {
       showNotification("error", error.message || "Không cập nhật được giỏ");
@@ -509,28 +409,9 @@ export default function CustomerOrderHubPage({ user }) {
   }
 
   async function handleRemoveFromCart(productId) {
-    if (!userId) {
-      // Guest: remove from server
-      const token = guestToken || getGuestToken();
-      if (!guestToken) {
-        setGuestToken(token);
-      }
-      setUpdatingProductId(productId);
-      try {
-        await orderApi.removeCartItem("guest", productId, token);
-        await loadCart();
-        showNotification("success", "Đã xóa sản phẩm khỏi giỏ hàng.");
-      } catch (error) {
-        showNotification("error", error.message || "Không xóa được sản phẩm");
-      } finally {
-        setUpdatingProductId(null);
-      }
-      return;
-    }
-
     setUpdatingProductId(productId);
     try {
-      await orderApi.removeCartItem(userId, productId);
+      await orderApi.removeCartItem(productId);
       await loadCart();
       showNotification("success", "Đã xóa sản phẩm khỏi giỏ hàng.");
     } catch (error) {
@@ -562,10 +443,11 @@ export default function CustomerOrderHubPage({ user }) {
 
     setSubmitting(true);
     try {
-      const order = await orderApi.createOrder(userId, {
+      const order = await orderApi.createOrder({
         addressId: Number(checkout.addressId),
         paymentMethod: paymentMethod.toUpperCase(),
         note: checkout.note?.trim() || null,
+        customerEmail: account?.email || user?.email || null,
       });
 
       if (order?.paymentUrl) {
@@ -665,7 +547,6 @@ export default function CustomerOrderHubPage({ user }) {
           <OrderCartPage
             account={account}
             userId={userId}
-            guestToken={guestToken}
             products={products}
             cartLoading={cartLoading}
             cart={cart}

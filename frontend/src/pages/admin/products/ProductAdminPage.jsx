@@ -511,11 +511,17 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
     <div className="min-h-screen bg-[#faf8ff] text-[#191b23] [font-family:Inter,system-ui,sans-serif]">
       <AdminSidebar2
         activeSection={activeAdminSection}
-        onSectionChange={setActiveAdminSection}
+        onSectionChange={(section) => {
+          setActiveAdminSection(section);
+          closeProductForm();
+          closeCategoryForm();
+          closeProductDetail();
+          closeAdminOrderDetail();
+        }}
         onNavigate={onNavigate}
       />
 
-      <main className="min-h-screen lg:ml-64">
+      <main key={activeAdminSection} className="min-h-screen lg:ml-64">
         <AdminTopbar
           user={user}
           onLogout={onLogout}
@@ -826,7 +832,10 @@ export default function ProductAdminPage({ user, onLogout, onNavigate }) {
 
       <button
         type="button"
+        onClick={() => setActiveAdminSection("support")}
         className="fixed bottom-8 right-8 z-50 flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-white/80 text-[#004ac6] shadow-2xl backdrop-blur-xl transition hover:scale-110 active:scale-95"
+        aria-label="Mo ho tro"
+        title="Mo ho tro"
       >
         <span className="material-symbols-outlined text-2xl transition group-hover:rotate-12">
           chat_bubble

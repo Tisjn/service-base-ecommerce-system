@@ -4,15 +4,14 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: payment-service
+    env_file:
+      - .env
     ports:
       - "3005:3005"
     environment:
-      - RDS_HOST=${RDS_HOST}
-      - RDS_PORT=${RDS_PORT:-3306}
-      - RDS_DB=${RDS_DB:-ecommerce_data}
-      - RDS_USER=${RDS_USER}
-      - RDS_PASSWORD=${RDS_PASSWORD}
-      - RDS_SSL=${RDS_SSL:-false}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://${RDS_HOST:-${DB_HOST}}:${RDS_PORT:-${DB_PORT:-3306}}/${RDS_DB:-${DB_NAME:-ecommerce_data}}?useSSL=${RDS_SSL:-${DB_SSL:-false}}&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=${RDS_USER:-${DB_USER}}
+      - SPRING_DATASOURCE_PASSWORD=${RDS_PASSWORD:-${DB_PASSWORD}}
       - SERVER_PORT=3005
       - MOMO_ENDPOINT=${MOMO_ENDPOINT:-https://test-payment.momo.vn/v2/gateway/api/create}
       - MOMO_PARTNER_CODE=${MOMO_PARTNER_CODE:-MOMO}

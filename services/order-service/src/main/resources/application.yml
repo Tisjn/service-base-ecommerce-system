@@ -24,6 +24,17 @@ spring:
     username: ${SPRING_RABBITMQ_USERNAME:guest}
     password: ${SPRING_RABBITMQ_PASSWORD:guest}
     virtual-host: ${SPRING_RABBITMQ_VIRTUAL_HOST:/}
+  mail:
+    host: ${SPRING_MAIL_HOST:${SMTP_HOST:}}
+    port: ${SPRING_MAIL_PORT:${SMTP_PORT:587}}
+    username: ${SPRING_MAIL_USERNAME:${SMTP_USER:}}
+    password: ${SPRING_MAIL_PASSWORD:${SMTP_PASS:}}
+    properties:
+      mail:
+        smtp:
+          auth: ${SPRING_MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${SPRING_MAIL_SMTP_STARTTLS_ENABLE:true}
 
 product:
   service:
@@ -33,8 +44,8 @@ payment:
     url: ${PAYMENT_SERVICE_URL:http://localhost:3005}
 notification:
   email:
-    from: no-reply@dtpshop.local
-    subject-prefix: [DTPShop]
+    from: ${NOTIFICATION_EMAIL_FROM:${SPRING_MAIL_USERNAME:${SMTP_USER:no-reply@dtpshop.local}}}
+    subject-prefix: ${NOTIFICATION_EMAIL_SUBJECT_PREFIX:[DTPShop]}
 
 server:
   port: ${SERVER_PORT:3004}
