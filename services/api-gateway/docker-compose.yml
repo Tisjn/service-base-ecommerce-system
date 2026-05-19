@@ -19,6 +19,7 @@ services:
       - PRODUCT_SERVICE_URL=http://host.docker.internal:3003
       - ORDER_SERVICE_URL=http://host.docker.internal:3004
       - PAYMENT_SERVICE_URL=http://host.docker.internal:3005
+      - AI_SERVICE_URL=http://host.docker.internal:3009
       - CHAT_SERVICE_URL=http://host.docker.internal:3008
 
       - RATE_LIMIT_WINDOW_MS=60000

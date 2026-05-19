@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: ai-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://${RDS_HOST:localhost}:${RDS_PORT:3306}/${RDS_DB:ecommerce_data}?useSSL=${RDS_SSL:false}&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:${RDS_USER:root}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${RDS_PASSWORD:password}}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+server:
+  port: ${SERVER_PORT:3009}
+
+google:
+  ai:
+    api-key: ${GOOGLE_AI_API_KEY:}
+    model: ${GOOGLE_AI_MODEL:gemini-2.5-flash}
+    endpoint: ${GOOGLE_AI_ENDPOINT:https://generativelanguage.googleapis.com/v1beta}
+
+ai:
+  context:
+    product-limit: ${AI_PRODUCT_LIMIT:50}
+    order-limit: ${AI_ORDER_LIMIT:10}
+    faq-limit: ${AI_FAQ_LIMIT:30}
