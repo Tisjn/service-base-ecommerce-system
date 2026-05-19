@@ -125,7 +125,7 @@ function rewriteUser(_path, req) {
 }
 
 function rewritePayment(_path, req) {
-  return getRequestUrl(req).replace(/^\/payments(?=\/|$)/, "/api/payments");
+  return getRequestUrl(req).replace(/^\/api\/payments(?=\/|$)/, "/payments");
 }
 
 function setupProxyRoutes(app) {
@@ -190,18 +190,28 @@ function setupProxyRoutes(app) {
 }
 
 function createSocketProxy() {
-  return createProxyMiddleware({
+  const orderSocketProxy = createProxyMiddleware({
+    target: config.orderServiceUrl,
+    changeOrigin: true,
+    ws: true,
+  });
+
+  const chatSocketProxy = createProxyMiddleware({
     target: config.chatServiceUrl,
     changeOrigin: true,
     ws: true,
-    router(req) {
+  });
+
+  return {
+    upgrade(req, socket, head) {
       if (req.url.startsWith("/ws")) {
-        return config.orderServiceUrl;
+        orderSocketProxy.upgrade(req, socket, head);
+        return;
       }
 
-      return config.chatServiceUrl;
+      chatSocketProxy.upgrade(req, socket, head);
     },
-  });
+  };
 }
 
 module.exports = {

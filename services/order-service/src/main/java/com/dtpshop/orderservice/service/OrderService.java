@@ -116,6 +116,10 @@ public class OrderService {
             if (!paymentResult.isSuccess()) {
                 throw new IllegalStateException("Khong tao duoc giao dich thanh toan.");
             }
+            if ("MOMO".equals(pendingOrder.getPaymentMethod())
+                    && (paymentResult.getPaymentUrl() == null || paymentResult.getPaymentUrl().isBlank())) {
+                throw new IllegalStateException("Khong tao duoc link thanh toan MoMo.");
+            }
             pendingOrder.setPaymentId(parseLong(paymentResult.getPaymentId()));
             pendingOrder.setPaymentUrl(paymentResult.getPaymentUrl());
         }
