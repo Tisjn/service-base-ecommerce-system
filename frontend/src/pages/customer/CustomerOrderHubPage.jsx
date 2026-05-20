@@ -7,6 +7,7 @@ import orderApi from "../../api/orderApi";
 import OrderToast from "./orders/components/OrderToast";
 import OrderDetailModal from "../../components/OrderDetailModal";
 import { useOrderNotifications } from "../../context/OrderNotificationContext";
+import useOrderSocket from "../../hooks/useOrderSocket";
 import OrderCartPage from "./orders/pages/OrderCartPage";
 import OrderCatalogPage from "./orders/pages/OrderCatalogPage";
 import OrderHistoryPage from "./orders/pages/OrderHistoryPage";
@@ -122,6 +123,10 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
 
   const isAdmin = resolveRole(account).includes("ADMIN");
   const userId = Number(account?.id || account?.userId || 0) || null;
+  const customerOrderTopics = useMemo(
+    () => (userId && !isAdmin ? [`/topic/users/${userId}/orders`] : []),
+    [isAdmin, userId],
+  );
 
   useEffect(() => {
     setAccount(resolveAccountCandidate(user));
@@ -274,6 +279,80 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
     },
     [orderPage, orderStatusFilter, userId, showNotification],
   );
+
+  const applyOrderStatusUpdate = useCallback(
+    (statusUpdate) => {
+      const orderId = statusUpdate?.orderId || statusUpdate?.id;
+      const nextStatus = statusUpdate?.status;
+      if (!orderId || !nextStatus) {
+        return;
+      }
+
+      let touchedVisibleOrder = false;
+      setOrders((currentOrders) => {
+        const nextOrders = currentOrders
+          .map((order) => {
+            if (String(order.orderId || order.id) !== String(orderId)) {
+              return order;
+            }
+
+            touchedVisibleOrder = true;
+            return {
+              ...order,
+              status: nextStatus,
+              paymentStatus: statusUpdate.paymentStatus ?? order.paymentStatus,
+              updatedAt: statusUpdate.updatedAt ?? order.updatedAt,
+              completedAt: statusUpdate.completedAt ?? order.completedAt,
+              cancelledAt: statusUpdate.cancelledAt ?? order.cancelledAt,
+            };
+          })
+          .filter(
+            (order) =>
+              orderStatusFilter === "ALL" || order.status === orderStatusFilter,
+          );
+
+        return nextOrders;
+      });
+
+      if (touchedVisibleOrder) {
+        showNotification(
+          "success",
+          `Đơn #${orderId} đã chuyển sang ${getStatusLabel(nextStatus)}.`,
+        );
+      }
+
+      orderApi
+        .getOrder(orderId)
+        .then((freshOrder) => {
+          setOrders((currentOrders) => {
+            const exists = currentOrders.some(
+              (order) =>
+                String(order.orderId || order.id) ===
+                String(freshOrder.orderId || freshOrder.id),
+            );
+
+            if (!exists) {
+              return currentOrders;
+            }
+
+            return currentOrders.map((order) =>
+              String(order.orderId || order.id) ===
+              String(freshOrder.orderId || freshOrder.id)
+                ? freshOrder
+                : order,
+            );
+          });
+        })
+        .catch(() => {
+          // The WebSocket payload already contains the changed status.
+        });
+    },
+    [orderStatusFilter, showNotification],
+  );
+
+  useOrderSocket(userId && !isAdmin ? applyOrderStatusUpdate : null, {
+    topics: customerOrderTopics,
+  });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

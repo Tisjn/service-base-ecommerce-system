@@ -1,82 +1,109 @@
 import { useEffect } from "react";
 import SockJS from "sockjs-client";
 
-// Minimal STOMP-over-SockJS implementation sufficient for subscribing to a single topic
-export default function useOrderSocket(onNewOrder) {
+const NEW_ORDER_TOPIC = "/topic/new_order";
+
+function parseStompBody(frame) {
+  const [, body = ""] = frame.split("\n\n");
+  return body.replace(/\u0000$/, "");
+}
+
+// Minimal STOMP-over-SockJS implementation sufficient for subscribing to topics.
+export default function useOrderSocket(onMessage, options = {}) {
   useEffect(() => {
+    if (typeof onMessage !== "function") {
+      return undefined;
+    }
+
+    const topics = Array.isArray(options.topics) && options.topics.length > 0
+      ? options.topics
+      : [NEW_ORDER_TOPIC];
+
     const gateway =
+      import.meta.env.VITE_ORDER_WS_URL ||
       import.meta.env.VITE_API_GATEWAY_URL ||
       import.meta.env.VITE_API_URL ||
       "http://localhost:8081";
-    const sock = new SockJS(`${gateway.replace(/\/$/, "")}/ws`);
 
+    let sock;
     let connected = false;
-    const subId = `sub-${Date.now()}`;
+    let closedByEffect = false;
+    let reconnectTimer;
+    const subPrefix = `sub-${Date.now()}`;
 
     function sendFrame(frame) {
       try {
-        sock.send(frame);
+        if (sock?.readyState === 1) {
+          sock.send(frame);
+        }
       } catch (err) {
-        // ignore
+        console.warn("Order WebSocket send failed", err);
       }
     }
 
-    sock.onopen = () => {
-      // send CONNECT
-      sendFrame("CONNECT\naccept-version:1.2\n\n\u0000");
-    };
+    function connect() {
+      sock = new SockJS(`${gateway.replace(/\/$/, "")}/ws`);
 
-    sock.onmessage = (e) => {
-      const text = typeof e.data === "string" ? e.data : "";
-      const idx = text.indexOf("\n");
-      if (idx === -1) return;
-      const command = text.substring(0, idx).trim();
+      sock.onopen = () => {
+        sendFrame("CONNECT\naccept-version:1.2\nheart-beat:10000,10000\n\n\u0000");
+      };
 
-      if (command === "CONNECTED") {
-        connected = true;
-        // subscribe to topic
-        sendFrame(
-          `SUBSCRIBE\nid:${subId}\ndestination:/topic/new_order\n\n\u0000`,
-        );
-        return;
-      }
+      sock.onmessage = (event) => {
+        const text = typeof event.data === "string" ? event.data : "";
+        const idx = text.indexOf("\n");
+        if (idx === -1) return;
+        const command = text.substring(0, idx).trim();
 
-      if (command === "MESSAGE") {
-        // body follows after a blank line
-        const parts = text.split("\n\n");
-        const body = parts
-          .slice(1)
-          .join("\n\n")
-          .replace(/\u0000$/, "");
-        try {
-          const payload = JSON.parse(body);
-          onNewOrder && onNewOrder(payload);
-        } catch (err) {
-          // ignore parse error
+        if (command === "CONNECTED") {
+          connected = true;
+          topics.forEach((topic, index) => {
+            sendFrame(`SUBSCRIBE\nid:${subPrefix}-${index}\ndestination:${topic}\n\n\u0000`);
+          });
+          return;
         }
-        return;
-      }
 
-      if (command === "ERROR") {
-        console.warn("STOMP error", text);
-        return;
-      }
-    };
+        if (command === "MESSAGE") {
+          try {
+            onMessage(JSON.parse(parseStompBody(text)));
+          } catch (err) {
+            console.warn("Invalid order WebSocket payload", err);
+          }
+          return;
+        }
 
-    sock.onclose = () => {
-      connected = false;
-    };
+        if (command === "ERROR") {
+          console.warn("Order WebSocket STOMP error", text);
+        }
+      };
+
+      sock.onclose = () => {
+        connected = false;
+        if (!closedByEffect) {
+          reconnectTimer = window.setTimeout(connect, 3000);
+        }
+      };
+    }
+
+    connect();
 
     return () => {
+      closedByEffect = true;
+      window.clearTimeout(reconnectTimer);
       try {
         if (connected) {
-          sendFrame(`UNSUBSCRIBE\nid:${subId}\n\n\u0000`);
+          topics.forEach((_, index) => {
+            sendFrame(`UNSUBSCRIBE\nid:${subPrefix}-${index}\n\n\u0000`);
+          });
           sendFrame("DISCONNECT\n\n\u0000");
         }
-      } catch (err) {}
+      } catch (err) {
+        console.warn("Order WebSocket disconnect failed", err);
+      }
       try {
-        sock.close();
-      } catch (e) {}
+        sock?.close();
+      } catch (err) {
+        console.warn("Order WebSocket close failed", err);
+      }
     };
-  }, [onNewOrder]);
+  }, [onMessage, options.topics]);
 }

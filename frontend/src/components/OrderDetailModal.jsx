@@ -1,10 +1,40 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import orderApi from "../api/orderApi";
+import useOrderSocket from "../hooks/useOrderSocket";
 
 export default function OrderDetailModal({ orderId, onClose }) {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const orderTopics = useMemo(
+    () => (orderId ? [`/topic/orders/${orderId}`] : []),
+    [orderId],
+  );
+
+  const handleOrderStatusUpdate = useCallback(
+    (statusUpdate) => {
+      const updateOrderId = statusUpdate?.orderId || statusUpdate?.id;
+      if (String(updateOrderId) !== String(orderId)) return;
+
+      setOrder((current) =>
+        current
+          ? {
+              ...current,
+              status: statusUpdate.status ?? current.status,
+              paymentStatus: statusUpdate.paymentStatus ?? current.paymentStatus,
+              updatedAt: statusUpdate.updatedAt ?? current.updatedAt,
+              completedAt: statusUpdate.completedAt ?? current.completedAt,
+              cancelledAt: statusUpdate.cancelledAt ?? current.cancelledAt,
+            }
+          : current,
+      );
+    },
+    [orderId],
+  );
+
+  useOrderSocket(orderId ? handleOrderStatusUpdate : null, {
+    topics: orderTopics,
+  });
 
   useEffect(() => {
     if (!orderId) return;

@@ -31,4 +31,24 @@ public class OrderWebSocketNotifier {
             logger.warn("Failed to notify admins via WebSocket: {}", ex.getMessage());
         }
     }
+
+    public void notifyOrderStatusChanged(OrderResponseDto order) {
+        try {
+            var payload = new java.util.HashMap<String, Object>();
+            payload.put("type", "ORDER_STATUS_CHANGED");
+            payload.put("orderId", order.getOrderId());
+            payload.put("userId", order.getUserId());
+            payload.put("status", order.getStatus());
+            payload.put("paymentStatus", order.getPaymentStatus());
+            payload.put("updatedAt", order.getUpdatedAt());
+            payload.put("completedAt", order.getCompletedAt());
+            payload.put("cancelledAt", order.getCancelledAt());
+
+            messagingTemplate.convertAndSend("/topic/orders/" + order.getOrderId(), payload);
+            messagingTemplate.convertAndSend("/topic/users/" + order.getUserId() + "/orders", payload);
+            logger.info("Notified order status change id={} status={}", order.getOrderId(), order.getStatus());
+        } catch (Exception ex) {
+            logger.warn("Failed to notify order status via WebSocket: {}", ex.getMessage());
+        }
+    }
 }

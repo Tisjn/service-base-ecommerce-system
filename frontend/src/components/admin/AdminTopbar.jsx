@@ -1,6 +1,12 @@
 import React from "react";
 import { useOrderNotifications } from "../../context/OrderNotificationContext";
 
+const currencyFormatter = new Intl.NumberFormat("vi-VN", {
+  style: "currency",
+  currency: "VND",
+  maximumFractionDigits: 0,
+});
+
 export default function AdminTopbar({ user, onLogout, onNavigate }) {
   const { notifications, unreadCount, markAllRead, openOrder } =
     useOrderNotifications() || {
@@ -26,12 +32,6 @@ export default function AdminTopbar({ user, onLogout, onNavigate }) {
     }
     if (typeof onNavigate === "function") {
       onNavigate("orders");
-    }
-    try {
-      window.history.pushState({}, "", `/orders/${orderId}`);
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    } catch {
-      // Browser history is optional for this shortcut.
     }
     setOpen(false);
   }
@@ -70,8 +70,8 @@ export default function AdminTopbar({ user, onLogout, onNavigate }) {
           >
             <span className="material-symbols-outlined">notifications</span>
             {unreadCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs text-white">
-                {unreadCount}
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-xs text-white">
+                {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             )}
           </button>
@@ -81,6 +81,7 @@ export default function AdminTopbar({ user, onLogout, onNavigate }) {
               <div className="mb-2 flex items-center justify-between">
                 <strong>Thông báo đơn hàng</strong>
                 <button
+                  type="button"
                   onClick={() => setOpen(false)}
                   className="text-sm text-slate-500"
                 >
@@ -96,6 +97,7 @@ export default function AdminTopbar({ user, onLogout, onNavigate }) {
                   notifications.map((notification) => (
                     <button
                       key={notification.id}
+                      type="button"
                       onClick={() =>
                         handleNotificationClick(notification.orderId)
                       }
@@ -104,14 +106,18 @@ export default function AdminTopbar({ user, onLogout, onNavigate }) {
                       <div className="font-semibold">
                         Đơn #{notification.orderId}
                       </div>
+                      {notification.userId ? (
+                        <div className="text-xs text-slate-500">
+                          Khách hàng #{notification.userId}
+                        </div>
+                      ) : null}
                       <div className="text-xs text-slate-500">
-                        {new Date(notification.createdAt).toLocaleString()}
+                        {new Date(notification.createdAt).toLocaleString(
+                          "vi-VN",
+                        )}
                       </div>
                       <div className="mt-1">
-                        {new Intl.NumberFormat("vi-VN", {
-                          style: "currency",
-                          currency: "VND",
-                        }).format(notification.total)}
+                        {currencyFormatter.format(notification.total)}
                       </div>
                     </button>
                   ))

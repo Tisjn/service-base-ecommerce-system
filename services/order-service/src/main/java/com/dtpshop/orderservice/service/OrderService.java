@@ -26,6 +26,8 @@ import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 public class OrderService {
@@ -139,19 +141,6 @@ public class OrderService {
                     pendingOrder.getCreatedAt());
             eventPublisherService.publishOrderCreated(evt);
         }
-        // Notify connected admin clients via WebSocket
-        if (orderWebSocketNotifier != null) {
-            com.dtpshop.orderservice.dto.OrderResponseDto notifyDto = new com.dtpshop.orderservice.dto.OrderResponseDto(
-                    pendingOrder.getId(), pendingOrder.getUserId(), pendingOrder.getAddressId(),
-                    pendingOrder.getOrderCode(), pendingOrder.getStatus(),
-                    pendingOrder.getSubtotal(), pendingOrder.getShippingFee(), pendingOrder.getFinalAmount(),
-                    pendingOrder.getNote(), pendingOrder.getPaymentMethod(), pendingOrder.getPaymentId(),
-                    pendingOrder.getPaymentStatus(), pendingOrder.getPaymentUrl(),
-                    pendingOrder.getCreatedAt(), pendingOrder.getUpdatedAt(),
-                    pendingOrder.getCompletedAt(), pendingOrder.getCancelledAt(),
-                    itemsToProcess);
-            orderWebSocketNotifier.notifyNewOrder(notifyDto);
-        }
         if (productServiceClient != null) {
             boolean reserved = productServiceClient.reserveInventory(itemsToProcess, "order-" + pendingOrder.getId());
             if (!reserved) {
@@ -162,7 +151,36 @@ public class OrderService {
         if (orderEmailService != null) {
             orderEmailService.sendOrderPlacedEmail(customerEmail, pendingOrder);
         }
+        notifyAdminsAfterCommit(pendingOrder, itemsToProcess);
         return order;
+    }
+
+    private void notifyAdminsAfterCommit(Order order, List<CartItemDto> itemsToProcess) {
+        if (orderWebSocketNotifier == null) {
+            return;
+        }
+
+        com.dtpshop.orderservice.dto.OrderResponseDto notifyDto = new com.dtpshop.orderservice.dto.OrderResponseDto(
+                order.getId(), order.getUserId(), order.getAddressId(),
+                order.getOrderCode(), order.getStatus(),
+                order.getSubtotal(), order.getShippingFee(), order.getFinalAmount(),
+                order.getNote(), order.getPaymentMethod(), order.getPaymentId(),
+                order.getPaymentStatus(), order.getPaymentUrl(),
+                order.getCreatedAt(), order.getUpdatedAt(),
+                order.getCompletedAt(), order.getCancelledAt(),
+                itemsToProcess);
+
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            orderWebSocketNotifier.notifyNewOrder(notifyDto);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                orderWebSocketNotifier.notifyNewOrder(notifyDto);
+            }
+        });
     }
 
     @Transactional
@@ -232,7 +250,9 @@ public class OrderService {
             order.setCompletedAt(LocalDateTime.now());
         }
         order.updateTimestamp();
-        return orderRepository.save(order);
+        Order saved = orderRepository.save(order);
+        notifyOrderStatusAfterCommit(saved);
+        return saved;
     }
 
     @Transactional
@@ -255,6 +275,7 @@ public class OrderService {
                 reason,
                 correlationId,
                 LocalDateTime.now()));
+        notifyOrderStatusAfterCommit(cancelled);
         return cancelled;
     }
 
@@ -265,7 +286,48 @@ public class OrderService {
         order.setPaymentId(parseLong(paymentId));
         order.setPaymentStatus("PAID");
         order.updateTimestamp();
-        orderRepository.save(order);
+        Order saved = orderRepository.save(order);
+        notifyOrderStatusAfterCommit(saved);
+    }
+
+    private void notifyOrderStatusAfterCommit(Order order) {
+        if (orderWebSocketNotifier == null || order == null) {
+            return;
+        }
+
+        com.dtpshop.orderservice.dto.OrderResponseDto notifyDto = toOrderResponseDto(order);
+
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            orderWebSocketNotifier.notifyOrderStatusChanged(notifyDto);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                orderWebSocketNotifier.notifyOrderStatusChanged(notifyDto);
+            }
+        });
+    }
+
+    private com.dtpshop.orderservice.dto.OrderResponseDto toOrderResponseDto(Order order) {
+        List<CartItemDto> items = order.getItems().stream()
+                .map(item -> new CartItemDto(
+                        item.getProductId(),
+                        item.getProductName(),
+                        item.getQuantity(),
+                        item.getPrice()))
+                .collect(Collectors.toList());
+
+        return new com.dtpshop.orderservice.dto.OrderResponseDto(
+                order.getId(), order.getUserId(), order.getAddressId(),
+                order.getOrderCode(), order.getStatus(),
+                order.getSubtotal(), order.getShippingFee(), order.getFinalAmount(),
+                order.getNote(), order.getPaymentMethod(), order.getPaymentId(),
+                order.getPaymentStatus(), order.getPaymentUrl(),
+                order.getCreatedAt(), order.getUpdatedAt(),
+                order.getCompletedAt(), order.getCancelledAt(),
+                items);
     }
 
     private void refreshPaymentSnapshot(Order order) {

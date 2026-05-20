@@ -123,12 +123,104 @@ export default function ProductAdminPage({
     useState(false);
   const [selectedAdminOrderError, setSelectedAdminOrderError] = useState("");
   const [orderStatusUpdating, setOrderStatusUpdating] = useState(false);
-  const { openedOrderId, closeOrder, lastNotification } =
+  const { openedOrderId, lastNotification } =
     useOrderNotifications() || {
       openedOrderId: null,
-      closeOrder: () => {},
       lastNotification: null,
     };
+
+  const loadAdminOrders = useCallback(
+    async (page = adminOrderPage) => {
+      setAdminOrdersLoading(true);
+      setAdminOrdersError("");
+      try {
+        const data = await orderApi.getAllOrders({
+          page,
+          size: ORDER_TABLE_PAGE_SIZE,
+          status: orderStatusFilter,
+          date: orderFilterDate || undefined,
+          direction: orderSortDirection,
+        });
+        const nextOrders = Array.isArray(data?.content)
+          ? data.content
+          : Array.isArray(data)
+            ? data
+            : [];
+        setAdminOrders(nextOrders);
+        setAdminOrderMeta({
+          page: Number(data?.number ?? page) || 0,
+          size:
+            Number(data?.size ?? ORDER_TABLE_PAGE_SIZE) ||
+            ORDER_TABLE_PAGE_SIZE,
+          totalPages: Number(data?.totalPages ?? 1) || 1,
+          totalElements:
+            Number(data?.totalElements ?? nextOrders.length) || 0,
+        });
+      } catch (error) {
+        setAdminOrdersError(
+          error.message || "Không tải được đơn hàng.",
+        );
+      } finally {
+        setAdminOrdersLoading(false);
+      }
+    },
+    [
+      adminOrderPage,
+      orderFilterDate,
+      orderSortDirection,
+      orderStatusFilter,
+    ],
+  );
+
+  const loadAdminOrderDetail = useCallback(async (orderId) => {
+    if (!orderId) return;
+    setSelectedAdminOrderLoading(true);
+    setSelectedAdminOrderError("");
+    setSelectedAdminOrderCustomer(null);
+    setSelectedAdminOrderAddress(null);
+    setSelectedAdminOrderComments([]);
+    try {
+      const [orderResult, commentsResult] = await Promise.all([
+        orderApi.getOrder(orderId),
+        orderApi.getOrderComments(orderId),
+      ]);
+      setSelectedAdminOrder(orderResult);
+      setSelectedAdminOrderComments(
+        Array.isArray(commentsResult) ? commentsResult : [],
+      );
+      if (orderResult?.userId) {
+        const [customerResult, addressesResult] = await Promise.allSettled([
+          getUserById(orderResult.userId),
+          getUserAddressesById(orderResult.userId),
+        ]);
+        if (customerResult.status === "fulfilled") {
+          setSelectedAdminOrderCustomer(customerResult.value);
+        }
+        if (addressesResult.status === "fulfilled") {
+          const addresses = Array.isArray(addressesResult.value)
+            ? addressesResult.value
+            : [];
+          setSelectedAdminOrderAddress(
+            addresses.find(
+              (address) => String(address.id) === String(orderResult.addressId),
+            ) || null,
+          );
+        }
+      }
+    } catch (error) {
+      setSelectedAdminOrderError(
+        error.message || "Không tải được chi tiết đơn hàng.",
+      );
+    } finally {
+      setSelectedAdminOrderLoading(false);
+    }
+  }, []);
+
+  const openAdminOrderDetail = useCallback((order) => {
+    const id = order.orderId || order.id;
+    setSelectedAdminOrder(order);
+    setSelectedAdminOrderId(id);
+  }, []);
 
   useEffect(() => {
     setActiveAdminSection(initialSection || "products");
@@ -145,7 +237,12 @@ export default function ProductAdminPage({
     if (newOrderId && String(selectedAdminOrderId) === newOrderId) {
       loadAdminOrderDetail(newOrderId);
     }
-  }, [lastNotification, loadAdminOrders, selectedAdminOrderId]);
+  }, [
+    lastNotification,
+    loadAdminOrderDetail,
+    loadAdminOrders,
+    selectedAdminOrderId,
+  ]);
 
   useEffect(() => {
     if (!openedOrderId) return;
@@ -156,7 +253,7 @@ export default function ProductAdminPage({
     setAdminOrderPage(0);
     loadAdminOrders(0);
     openAdminOrderDetail({ id: orderId });
-  }, [openedOrderId, selectedAdminOrderId, loadAdminOrders]);
+  }, [openedOrderId, selectedAdminOrderId, loadAdminOrders, openAdminOrderDetail]);
 
   const stats = useMemo(() => {
     const outOfStock = products.filter(
@@ -251,6 +348,7 @@ export default function ProductAdminPage({
   }, [
     activeAdminSection,
     adminOrderPage,
+    loadAdminOrders,
     orderFilterDate,
     orderSortDirection,
     orderStatusFilter,
@@ -278,7 +376,7 @@ export default function ProductAdminPage({
   useEffect(() => {
     if (!selectedAdminOrderId) return undefined;
     loadAdminOrderDetail(selectedAdminOrderId);
-  }, [selectedAdminOrderId]);
+  }, [loadAdminOrderDetail, selectedAdminOrderId]);
 
   useEffect(() => {
     if (!notification) return undefined;
@@ -286,7 +384,7 @@ export default function ProductAdminPage({
     return () => window.clearTimeout(timer);
   }, [notification]);
 
-  async function loadAdminOrders(page = adminOrderPage) {
+  async function loadAdminOrdersLegacy(page = adminOrderPage) {
     setAdminOrdersLoading(true);
     setAdminOrdersError("");
     try {
@@ -327,7 +425,7 @@ export default function ProductAdminPage({
     setOrderStatusFilter(value);
   }
 
-  async function loadAdminOrderDetail(orderId) {
+  async function loadAdminOrderDetailLegacy(orderId) {
     if (!orderId) return;
     setSelectedAdminOrderLoading(true);
     setSelectedAdminOrderError("");
@@ -371,7 +469,7 @@ export default function ProductAdminPage({
     }
   }
 
-  function openAdminOrderDetail(order) {
+  function openAdminOrderDetailLegacy(order) {
     const id = order.orderId || order.id;
     setSelectedAdminOrder(order);
     setSelectedAdminOrderId(id);
