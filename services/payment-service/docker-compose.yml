@@ -12,6 +12,8 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:mysql://${RDS_HOST:-${DB_HOST}}:${RDS_PORT:-${DB_PORT:-3306}}/${RDS_DB:-${DB_NAME:-ecommerce_data}}?useSSL=${RDS_SSL:-${DB_SSL:-false}}&allowPublicKeyRetrieval=true
       - SPRING_DATASOURCE_USERNAME=${RDS_USER:-${DB_USER}}
       - SPRING_DATASOURCE_PASSWORD=${RDS_PASSWORD:-${DB_PASSWORD}}
+      - SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=2
+      - SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=0
       - SERVER_PORT=3005
       - MOMO_ENDPOINT=${MOMO_ENDPOINT:-https://test-payment.momo.vn/v2/gateway/api/create}
       - MOMO_PARTNER_CODE=${MOMO_PARTNER_CODE:-MOMO}

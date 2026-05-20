@@ -111,6 +111,7 @@ services:
 
       # Có dùng SSL hay không
       - DB_SSL=false
+      - DB_POOL_LIMIT=2
 
       # =========================
       # Redis Config

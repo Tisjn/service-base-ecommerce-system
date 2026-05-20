@@ -46,7 +46,7 @@ const env = {
     //
     ssl: toBool("DB_SSL", false),
     // Số lượng kết nối tối đa trong pool
-    poolLimit: toInt("DB_POOL_LIMIT", 10),
+    poolLimit: toInt("DB_POOL_LIMIT", 2),
   },
   redis: {
     host: requireEnv("REDIS_HOST", "localhost"),

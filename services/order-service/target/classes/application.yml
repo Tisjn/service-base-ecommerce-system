@@ -6,13 +6,20 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:${RDS_USER:root}}
     password: ${SPRING_DATASOURCE_PASSWORD:${RDS_PASSWORD:password}}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:1}
+      minimum-idle: ${SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE:0}
+      idle-timeout: ${SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT:30000}
+      initialization-fail-timeout: ${SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT:-1}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
     properties:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.MySQL8Dialect
+        boot:
+          allow_jdbc_metadata_access: ${SPRING_JPA_ALLOW_JDBC_METADATA_ACCESS:true}
   data:
     redis:
       host: ${SPRING_REDIS_HOST:localhost}
@@ -46,6 +53,15 @@ notification:
   email:
     from: ${NOTIFICATION_EMAIL_FROM:${SPRING_MAIL_USERNAME:${SMTP_USER:no-reply@dtpshop.local}}}
     subject-prefix: ${NOTIFICATION_EMAIL_SUBJECT_PREFIX:[DTPShop]}
+
+management:
+  health:
+    db:
+      enabled: ${MANAGEMENT_HEALTH_DB_ENABLED:false}
+  endpoints:
+    web:
+      exposure:
+        include: health,info
 
 server:
   port: ${SERVER_PORT:3004}

@@ -41,6 +41,8 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:mysql://database-1-instance-1.cvwyy4mmuaiw.ap-southeast-1.rds.amazonaws.com:3306/ecommerce_data?useSSL=false&allowPublicKeyRetrieval=true
       - SPRING_DATASOURCE_USERNAME=admin
       - SPRING_DATASOURCE_PASSWORD=Tinle091104
+      - SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=2
+      - SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=0
       # Redis
       - SPRING_REDIS_HOST=redis-cache
       - SPRING_REDIS_PORT=6379
