@@ -88,6 +88,11 @@ public class UserController {
         return ResponseEntity.ok(userService.getUser(id));
     }
 
+    @GetMapping("/{id}/addresses")
+    public ResponseEntity<List<AddressResponse>> getUserAddresses(@PathVariable Long id) {
+        return ResponseEntity.ok(userService.getUserAddresses(id));
+    }
+
     @PatchMapping("/{id}")
     public ResponseEntity<UserResponse> updateUser(
             @PathVariable Long id,

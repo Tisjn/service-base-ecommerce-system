@@ -60,6 +60,15 @@ public class UserService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<AddressResponse> getUserAddresses(Long userId) {
+        findActiveUser(userId);
+        return addressRepository.findByUserIdOrderByDefaultAddressDescCreatedAtDescIdDesc(userId)
+                .stream()
+                .map(AddressResponse::from)
+                .toList();
+    }
+
     @Transactional
     public AddressResponse createMyAddress(GatewayUser gatewayUser, AddressRequest request) {
         UserProfile user = userRepository.findById(gatewayUser.id())

@@ -280,7 +280,7 @@ export function emitChatEvent(socket, eventName, payload, timeoutMs = 8000) {
     () =>
       new Promise((resolve, reject) => {
         const timer = window.setTimeout(() => {
-          reject(new Error("Socket khong phan hoi"));
+          reject(new Error("Socket không phản hồi"));
         }, timeoutMs);
 
         socket.emit(eventName, payload, (ack = {}) => {

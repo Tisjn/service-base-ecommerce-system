@@ -15,7 +15,7 @@ services:
       - RDS_SSL=${RDS_SSL:-false}
       - SERVER_PORT=3009
       - GOOGLE_AI_API_KEY=${GOOGLE_AI_API_KEY}
-      - GOOGLE_AI_MODEL=${GOOGLE_AI_MODEL:-gemini-2.5-flash}
+      - GOOGLE_AI_MODEL=${GOOGLE_AI_MODEL:-gemini-2.5-flash-lite}
     networks:
       - app-network
     restart: on-failure

@@ -161,6 +161,24 @@ public class ProductService {
 
     @Transactional
     @CacheEvict(value = "products", allEntries = true)
+    public void permanentlyDeleteProduct(Long id) {
+        Product product = getProductEntity(id);
+        if (product.getStatus() != ProductStatus.HIDDEN) {
+            throw new IllegalStateException("Chỉ có thể xóa vĩnh viễn sản phẩm đang bị ẩn");
+        }
+        if (product.getReservedQuantity() > 0 || cartService.isProductInCart(id)) {
+            throw new IllegalStateException(
+                    "Không thể xóa vĩnh viễn sản phẩm vì sản phẩm đang được giữ hoặc có trong giỏ hàng");
+        }
+        if (orderServiceClient.hasProductOrders(id)) {
+            throw new IllegalStateException(
+                    "Không thể xóa vĩnh viễn sản phẩm vì đã có lịch sử đơn hàng");
+        }
+        productRepository.delete(product);
+    }
+
+    @Transactional
+    @CacheEvict(value = "products", allEntries = true)
     public Product updateStock(Long id, Integer stockQuantity) {
         Product product = getProductEntity(id);
         if (stockQuantity < product.getReservedQuantity()) {

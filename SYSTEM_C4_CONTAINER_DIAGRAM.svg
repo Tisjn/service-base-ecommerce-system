@@ -1,0 +1,186 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1083" viewBox="0 0 1800 1300">
+  <defs>
+    <style>
+      .bg { fill: #f7f8fc; }
+      .title { font: 700 34px 'Segoe UI', Arial, sans-serif; fill: #102a43; }
+      .subtitle { font: 400 16px 'Segoe UI', Arial, sans-serif; fill: #52606d; }
+      .section { font: 700 18px 'Segoe UI', Arial, sans-serif; fill: #334e68; }
+      .label { font: 700 18px 'Segoe UI', Arial, sans-serif; fill: #102a43; }
+      .small { font: 400 14px 'Segoe UI', Arial, sans-serif; fill: #334e68; }
+      .tiny { font: 400 12px 'Segoe UI', Arial, sans-serif; fill: #52606d; }
+      .actor { fill: #dbeafe; stroke: #2563eb; stroke-width: 2; }
+      .container { fill: #d1fae5; stroke: #059669; stroke-width: 2.2; }
+      .data { fill: #fff7ed; stroke: #d97706; stroke-width: 2.2; }
+      .ext { fill: #f3e8ff; stroke: #7c3aed; stroke-width: 2.2; }
+      .boundary { fill: rgba(255,255,255,0.45); stroke: #94a3b8; stroke-width: 2.2; stroke-dasharray: 10 7; }
+      .arrow { stroke: #475569; stroke-width: 2.2; fill: none; marker-end: url(#arrowhead); }
+      .dashed { stroke-dasharray: 8 6; }
+      .gridline { stroke: rgba(148,163,184,0.20); stroke-width: 1; }
+      .shadow { filter: drop-shadow(0 6px 14px rgba(15, 23, 42, 0.12)); }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569" />
+    </marker>
+    <linearGradient id="headerGrad" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#eef2ff" />
+      <stop offset="100%" stop-color="#f8fafc" />
+    </linearGradient>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1800" height="1300" />
+  <rect x="0" y="0" width="1800" height="110" fill="url(#headerGrad)" />
+  <text class="title" x="50" y="54">DTPShop - C4 Container Diagram</text>
+  <text class="subtitle" x="50" y="82">Level 2 theo C4: Containers, database, queue và dịch vụ ngoài</text>
+
+  <line class="gridline" x1="0" y1="130" x2="1800" y2="130" />
+  <line class="gridline" x1="0" y1="760" x2="1800" y2="760" />
+
+  <text class="section" x="50" y="150">Actors</text>
+  <rect class="actor shadow" x="40" y="180" rx="18" ry="18" width="150" height="72" />
+  <text class="label" x="115" y="212" text-anchor="middle">Customer</text>
+  <text class="tiny" x="115" y="233" text-anchor="middle">Web browser</text>
+
+  <rect class="actor shadow" x="40" y="286" rx="18" ry="18" width="150" height="72" />
+  <text class="label" x="115" y="318" text-anchor="middle">Admin</text>
+  <text class="tiny" x="115" y="339" text-anchor="middle">Web browser</text>
+
+  <rect class="actor shadow" x="40" y="392" rx="18" ry="18" width="150" height="72" />
+  <text class="label" x="115" y="424" text-anchor="middle">Support</text>
+  <text class="tiny" x="115" y="445" text-anchor="middle">Chat agent</text>
+
+  <rect class="boundary" x="230" y="160" rx="28" ry="28" width="1290" height="560" />
+  <text class="section" x="262" y="192">DTPShop Software System</text>
+  <text class="tiny" x="262" y="214">System boundary - nội bộ chỉ gồm containers triển khai trong workspace</text>
+
+  <text class="section" x="50" y="785">External dependencies and data stores</text>
+
+  <rect class="container shadow" x="300" y="250" rx="18" ry="18" width="220" height="96" />
+  <text class="label" x="410" y="286" text-anchor="middle">Frontend React</text>
+  <text class="small" x="410" y="310" text-anchor="middle">Vite app :5173</text>
+  <text class="tiny" x="410" y="330" text-anchor="middle">Customer / Admin UI</text>
+
+  <rect class="container shadow" x="610" y="250" rx="18" ry="18" width="220" height="96" />
+  <text class="label" x="720" y="286" text-anchor="middle">API Gateway</text>
+  <text class="small" x="720" y="310" text-anchor="middle">Node.js :8080</text>
+  <text class="tiny" x="720" y="330" text-anchor="middle">Routing, JWT verify, rate limit</text>
+
+  <rect class="container shadow" x="920" y="250" rx="18" ry="18" width="220" height="96" />
+  <text class="label" x="1030" y="286" text-anchor="middle">auth-service</text>
+  <text class="small" x="1030" y="310" text-anchor="middle">Node.js :3001</text>
+  <text class="tiny" x="1030" y="330" text-anchor="middle">OTP, JWT, refresh token</text>
+
+  <rect class="container shadow" x="1240" y="250" rx="18" ry="18" width="220" height="96" />
+  <text class="label" x="1350" y="286" text-anchor="middle">user-service</text>
+  <text class="small" x="1350" y="310" text-anchor="middle">Spring Boot :3002</text>
+  <text class="tiny" x="1350" y="330" text-anchor="middle">Profile, address, admin ops</text>
+
+  <rect class="container shadow" x="300" y="390" rx="18" ry="18" width="220" height="96" />
+  <text class="label" x="410" y="426" text-anchor="middle">product-service</text>
+  <text class="small" x="410" y="450" text-anchor="middle">Spring Boot :3003</text>
+  <text class="tiny" x="410" y="470" text-anchor="middle">Catalog + S3 image upload</text>
+
+  <rect class="container shadow" x="610" y="390" rx="18" ry="18" width="220" height="96" />
+  <text class="label" x="720" y="426" text-anchor="middle">order-service</text>
+  <text class="small" x="720" y="450" text-anchor="middle">Spring Boot :3004</text>
+  <text class="tiny" x="720" y="470" text-anchor="middle">Cart, order flow, RabbitMQ</text>
+
+  <rect class="container shadow" x="920" y="390" rx="18" ry="18" width="220" height="96" />
+  <text class="label" x="1030" y="426" text-anchor="middle">payment-service</text>
+  <text class="small" x="1030" y="450" text-anchor="middle">Spring Boot :3005</text>
+  <text class="tiny" x="1030" y="470" text-anchor="middle">Payment orchestration</text>
+
+  <rect class="container shadow" x="1240" y="390" rx="18" ry="18" width="220" height="96" />
+  <text class="label" x="1350" y="426" text-anchor="middle">ai-service</text>
+  <text class="small" x="1350" y="450" text-anchor="middle">Spring Boot :3009</text>
+  <text class="tiny" x="1350" y="470" text-anchor="middle">Safe read-only AI assistant</text>
+
+  <rect class="container shadow" x="460" y="530" rx="18" ry="18" width="220" height="96" />
+  <text class="label" x="570" y="566" text-anchor="middle">chat-service</text>
+  <text class="small" x="570" y="590" text-anchor="middle">Node.js :3008</text>
+  <text class="tiny" x="570" y="610" text-anchor="middle">Socket.io chat + file upload</text>
+
+  <rect class="data shadow" x="110" y="830" rx="18" ry="18" width="300" height="96" />
+  <text class="label" x="260" y="866" text-anchor="middle">AWS RDS MySQL</text>
+  <text class="small" x="260" y="890" text-anchor="middle">authdb | userdb | productdb | orderdb | paymentdb</text>
+  <text class="tiny" x="260" y="910" text-anchor="middle">Schema riêng cho từng service</text>
+
+  <rect class="data shadow" x="460" y="830" rx="18" ry="18" width="260" height="96" />
+  <text class="label" x="590" y="866" text-anchor="middle">Redis shared</text>
+  <text class="small" x="590" y="890" text-anchor="middle">OTP, refresh token, cache, cart</text>
+  <text class="tiny" x="590" y="910" text-anchor="middle">Dùng bởi auth/product/order</text>
+
+  <rect class="data shadow" x="760" y="830" rx="18" ry="18" width="260" height="96" />
+  <text class="label" x="890" y="866" text-anchor="middle">Redis chat</text>
+  <text class="small" x="890" y="890" text-anchor="middle">Notification queue</text>
+  <text class="tiny" x="890" y="910" text-anchor="middle">Dùng riêng cho chat-service</text>
+
+  <rect class="ext shadow" x="1060" y="830" rx="18" ry="18" width="300" height="96" />
+  <text class="label" x="1210" y="866" text-anchor="middle">RabbitMQ</text>
+  <text class="small" x="1210" y="890" text-anchor="middle">Order event bus</text>
+  <text class="tiny" x="1210" y="910" text-anchor="middle">Mediator cho workflow order</text>
+
+  <rect class="data shadow" x="1380" y="830" rx="18" ry="18" width="300" height="96" />
+  <text class="label" x="1530" y="866" text-anchor="middle">AWS DynamoDB</text>
+  <text class="small" x="1530" y="890" text-anchor="middle">rooms | messages | notifications</text>
+  <text class="tiny" x="1530" y="910" text-anchor="middle">Chat persistence</text>
+
+  <rect class="ext shadow" x="110" y="970" rx="18" ry="18" width="300" height="96" />
+  <text class="label" x="260" y="1006" text-anchor="middle">AWS S3</text>
+  <text class="small" x="260" y="1030" text-anchor="middle">Product images</text>
+  <text class="tiny" x="260" y="1050" text-anchor="middle">Upload trực tiếp từ frontend</text>
+
+  <rect class="ext shadow" x="460" y="970" rx="18" ry="18" width="260" height="96" />
+  <text class="label" x="590" y="1006" text-anchor="middle">SMTP Gmail</text>
+  <text class="small" x="590" y="1030" text-anchor="middle">OTP, order emails</text>
+  <text class="tiny" x="590" y="1050" text-anchor="middle">auth-service, order-service</text>
+
+  <rect class="ext shadow" x="760" y="970" rx="18" ry="18" width="260" height="96" />
+  <text class="label" x="890" y="1006" text-anchor="middle">Google AI / Gemini</text>
+  <text class="small" x="890" y="1030" text-anchor="middle">Customer assistant</text>
+  <text class="tiny" x="890" y="1050" text-anchor="middle">Read-only context from MySQL</text>
+
+  <rect class="ext shadow" x="1060" y="970" rx="18" ry="18" width="300" height="96" />
+  <text class="label" x="1210" y="1006" text-anchor="middle">MoMo gateway</text>
+  <text class="small" x="1210" y="1030" text-anchor="middle">Online payment provider</text>
+  <text class="tiny" x="1210" y="1050" text-anchor="middle">payment-service integration</text>
+
+  <rect class="ext shadow" x="1380" y="970" rx="18" ry="18" width="300" height="96" />
+  <text class="label" x="1530" y="1006" text-anchor="middle">Browser WebSocket</text>
+  <text class="small" x="1530" y="1030" text-anchor="middle">Realtime chat channel</text>
+  <text class="tiny" x="1530" y="1050" text-anchor="middle">Frontend ↔ chat-service</text>
+
+  <path class="arrow" d="M190 216 L300 216 L300 298" />
+  <path class="arrow" d="M190 322 L300 322 L300 298" />
+  <path class="arrow dashed" d="M190 428 L500 428 L500 578 L460 578" />
+
+  <path class="arrow" d="M520 298 L610 298" />
+  <path class="arrow" d="M830 298 L920 298" />
+  <path class="arrow" d="M1140 298 L1240 298" />
+  <path class="arrow" d="M520 438 L610 438" />
+  <path class="arrow" d="M830 438 L920 438" />
+  <path class="arrow" d="M1140 438 L1240 438" />
+  <path class="arrow dashed" d="M830 438 L890 438 L890 578 L680 578" />
+
+  <path class="arrow" d="M730 346 L730 830" />
+  <path class="arrow" d="M1040 346 L1040 830" />
+  <path class="arrow" d="M1350 346 L1350 830" />
+
+  <path class="arrow" d="M410 346 L410 390" />
+  <path class="arrow" d="M570 626 L570 830" />
+  <path class="arrow" d="M720 486 L720 830" />
+  <path class="arrow" d="M1030 486 L1030 830" />
+  <path class="arrow" d="M1350 486 L1530 486 L1530 830" />
+
+  <path class="arrow" d="M410 486 L260 486 L260 830" />
+  <path class="arrow" d="M410 486 L410 970 L260 970" />
+  <path class="arrow" d="M410 486 L410 830 L590 830" />
+  <path class="arrow" d="M720 486 L720 830 L590 830" />
+  <path class="arrow" d="M1030 486 L1030 830 L1210 830" />
+  <path class="arrow" d="M1350 486 L1350 970 L890 970" />
+
+  <path class="arrow dashed" d="M720 298 L720 250" />
+  <path class="arrow dashed" d="M1350 298 L1350 250" />
+
+  <text class="tiny" x="64" y="1140">Ghi chú: CSDL chính là AWS RDS MySQL với schema riêng theo service; chat-service dùng thêm DynamoDB và Redis riêng.</text>
+  <text class="tiny" x="64" y="1162">Mũi tên nét đứt biểu diễn luồng gián tiếp / realtime hoặc tích hợp phụ trợ.</text>
+</svg>

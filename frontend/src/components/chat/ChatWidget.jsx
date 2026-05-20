@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { askAiAssistant } from "../../api/aiApi";
+import {
+  askAiAssistant,
+  getAiErrorMessage,
+  getAiRetryAfterSeconds,
+} from "../../api/aiApi";
 import {
   createChatRoom,
   createChatSocket,
@@ -37,13 +41,15 @@ export default function ChatWidget({ user, onRequestLogin }) {
       id: "ai-welcome",
       role: "assistant",
       message:
-        "Xin chao, minh la tro ly AI cua DTPShop. Ban can tim san pham, don hang hay chinh sach nao?",
+        "Xin chào, mình là trợ lý AI của DTPShop. Bạn cần tìm sản phẩm, đơn hàng hay chính sách nào?",
       timestamp: Date.now(),
     },
   ]);
   const [aiDraft, setAiDraft] = useState("");
   const [aiStatus, setAiStatus] = useState("idle");
   const [aiError, setAiError] = useState("");
+  const [aiRetryUntil, setAiRetryUntil] = useState(0);
+  const [aiRetrySeconds, setAiRetrySeconds] = useState(0);
   const [room, setRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
@@ -60,6 +66,7 @@ export default function ChatWidget({ user, onRequestLogin }) {
   const userId = normalizeUserId(user);
 
   const canChat = Boolean(userId);
+  const aiRateLimited = aiRetrySeconds > 0;
 
   const appendMessage = useCallback((message) => {
     setMessages((prev) => {
@@ -107,6 +114,28 @@ export default function ChatWidget({ user, onRequestLogin }) {
   }, [aiMessages.length, aiOpen]);
 
   useEffect(() => {
+    if (!aiRetryUntil) {
+      setAiRetrySeconds(0);
+      return undefined;
+    }
+
+    const updateRetrySeconds = () => {
+      const secondsLeft = Math.max(
+        0,
+        Math.ceil((aiRetryUntil - Date.now()) / 1000),
+      );
+      setAiRetrySeconds(secondsLeft);
+      if (secondsLeft === 0) {
+        setAiRetryUntil(0);
+      }
+    };
+
+    updateRetrySeconds();
+    const timer = window.setInterval(updateRetrySeconds, 1000);
+    return () => window.clearInterval(timer);
+  }, [aiRetryUntil]);
+
+  useEffect(() => {
     if (!open || !canChat) {
       return undefined;
     }
@@ -134,7 +163,7 @@ export default function ChatWidget({ user, onRequestLogin }) {
             setStatus(activeRoom.status === "closed" ? "closed" : "ready");
             setError("");
           } catch (err) {
-            setError(err.message || "Khong tham gia duoc phong chat");
+            setError(err.message || "Không tham gia được phòng chat");
             setStatus("error");
           }
         });
@@ -147,7 +176,7 @@ export default function ChatWidget({ user, onRequestLogin }) {
           if (event.userType !== "admin") return;
           window.clearTimeout(typingTimerRef.current);
           if (event.isTyping) {
-            setTypingUser("Admin dang soan tin...");
+            setTypingUser("Admin đang soạn tin...");
             typingTimerRef.current = window.setTimeout(
               () => setTypingUser(""),
               1800,
@@ -190,7 +219,7 @@ export default function ChatWidget({ user, onRequestLogin }) {
             setError(
               err?.response?.data?.message ||
                 err.message ||
-                "Khong mo duoc chat",
+                "Không mở được chat",
             );
             setStatus("error");
           }
@@ -202,7 +231,7 @@ export default function ChatWidget({ user, onRequestLogin }) {
       } catch (err) {
         if (!cancelled) {
           setError(
-            err?.response?.data?.message || err.message || "Khong mo duoc chat",
+            err?.response?.data?.message || err.message || "Không mở được chat",
           );
           setStatus("error");
         }
@@ -256,7 +285,7 @@ export default function ChatWidget({ user, onRequestLogin }) {
       setError("");
     } catch (err) {
       setDraft(text);
-      setError(err.message || "Khong gui duoc tin nhan");
+      setError(err.message || "Không gửi được tin nhắn");
     } finally {
       setSending(false);
     }
@@ -280,7 +309,7 @@ export default function ChatWidget({ user, onRequestLogin }) {
       setStatus("ready");
     } catch (err) {
       setError(
-        err?.response?.data?.message || err.message || "Upload that bai",
+        err?.response?.data?.message || err.message || "Upload thất bại",
       );
       setStatus("ready");
     }
@@ -289,7 +318,7 @@ export default function ChatWidget({ user, onRequestLogin }) {
   async function sendAiText(event) {
     event.preventDefault();
     const text = aiDraft.trim();
-    if (!text || aiStatus === "thinking") return;
+    if (!text || aiStatus === "thinking" || aiRateLimited) return;
 
     const userMessage = {
       id: `user-${Date.now()}`,
@@ -310,16 +339,16 @@ export default function ChatWidget({ user, onRequestLogin }) {
         {
           id: `ai-${Date.now()}`,
           role: "assistant",
-          message: data.answer || "Minh chua co cau tra loi phu hop luc nay.",
+          message: data.answer || "Mình chưa có câu trả lời phù hợp lúc này.",
           timestamp: Date.now(),
         },
       ]);
     } catch (err) {
-      setAiError(
-        err?.response?.data?.message ||
-          err.message ||
-          "Khong goi duoc tro ly AI",
-      );
+      const retryAfterSeconds = getAiRetryAfterSeconds(err);
+      if (retryAfterSeconds > 0) {
+        setAiRetryUntil(Date.now() + retryAfterSeconds * 1000);
+      }
+      setAiError(getAiErrorMessage(err));
       setAiDraft(text);
     } finally {
       setAiStatus("idle");
@@ -328,17 +357,17 @@ export default function ChatWidget({ user, onRequestLogin }) {
 
 
   const title = useMemo(() => {
-    if (!canChat) return "Can dang nhap de chat";
-    if (isClosed) return "Cuoc chat da dong";
-    if (status === "loading") return "Dang ket noi admin...";
-    return "Ho tro truc tuyen";
+    if (!canChat) return "Cần đăng nhập để chat";
+    if (isClosed) return "Cuộc chat đã đóng";
+    if (status === "loading") return "Đang kết nối admin...";
+    return "Hỗ trợ trực tuyến";
   }, [canChat, isClosed, status]);
 
   const closedMessage = useMemo(() => {
     if (status === "closed") {
-      return "Cuoc tro chuyen nay da duoc dong. Khi admin mo lai, ban se dung lai duoc o day.";
+      return "Cuộc trò chuyện này đã được đóng. Khi admin mở lại, bạn sẽ dùng lại được ở đây.";
     }
-    return "Chat dang tam dong. Khi admin mo lai cuoc chat, giao dien se tu chuyen ve che do nhan tin.";
+    return "Chat đang tạm đóng. Khi admin mở lại cuộc chat, giao diện sẽ tự chuyển về chế độ nhắn tin.";
   }, [status]);
 
   return (
@@ -349,8 +378,8 @@ export default function ChatWidget({ user, onRequestLogin }) {
             type="button"
             onClick={handleAiOpen}
             className="flex h-14 w-14 items-center justify-center rounded-full border border-[#ffd6c4] bg-white text-[#ff4500] shadow-[0_16px_44px_-18px_rgba(255,69,0,0.7)] transition hover:-translate-y-0.5 hover:bg-[#fff1e8]"
-            aria-label="Chat voi AI"
-            title="Chat voi AI"
+            aria-label="Chat với AI"
+            title="Chat với AI"
           >
             <span className="material-symbols-outlined text-3xl">
               smart_toy
@@ -360,8 +389,8 @@ export default function ChatWidget({ user, onRequestLogin }) {
             type="button"
             onClick={handleOpen}
             className="flex h-16 w-16 items-center justify-center rounded-full bg-[#ff4500] text-white shadow-[0_18px_50px_-18px_rgba(255,69,0,0.75)] transition hover:-translate-y-0.5 hover:bg-[#e63e00] hover:shadow-[0_22px_60px_-18px_rgba(255,69,0,0.9)]"
-            aria-label="Mo chat ho tro"
-            title="Chat voi admin"
+            aria-label="Mở chat hỗ trợ"
+            title="Chat với admin"
           >
             <span className="material-symbols-outlined text-3xl">
               support_agent
@@ -379,10 +408,10 @@ export default function ChatWidget({ user, onRequestLogin }) {
               </span>
               <div className="min-w-0">
                 <p className="truncate text-sm font-extrabold">
-                  Tro ly AI DTPShop
+                  Trợ lý AI DTPShop
                 </p>
                 <p className="truncate text-xs text-[#ffe5d8]">
-                  Goi ai-service qua API gateway
+                  Gọi ai-service qua API gateway
                 </p>
               </div>
             </div>
@@ -390,7 +419,7 @@ export default function ChatWidget({ user, onRequestLogin }) {
               type="button"
               onClick={() => setAiOpen(false)}
               className="rounded-full p-2 text-white hover:bg-white/10"
-              aria-label="Dong chat AI"
+              aria-label="Đóng chat AI"
             >
               <span className="material-symbols-outlined text-xl">close</span>
             </button>
@@ -445,7 +474,7 @@ export default function ChatWidget({ user, onRequestLogin }) {
                     <span className="h-2 w-2 animate-bounce rounded-full bg-[#ff4500] [animation-delay:-0.1s]" />
                     <span className="h-2 w-2 animate-bounce rounded-full bg-[#ff4500]" />
                   </span>
-                  <span>AI dang tra loi...</span>
+                  <span>AI đang trả lời...</span>
                 </div>
               </div>
             ) : null}
@@ -466,22 +495,34 @@ export default function ChatWidget({ user, onRequestLogin }) {
                     sendAiText(event);
                   }
                 }}
-                disabled={aiStatus === "thinking"}
+                disabled={aiStatus === "thinking" || aiRateLimited}
                 rows="1"
                 className="min-h-11 flex-1 resize-none rounded-xl border border-[#ffd6c4] px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#ff4500] focus:ring-4 focus:ring-[#ff4500]/10"
-                placeholder="Hoi AI ve san pham, don hang..."
+                placeholder={
+                  aiRateLimited
+                    ? `Chờ ${aiRetrySeconds}s rồi hỏi tiếp...`
+                    : "Hỏi AI về sản phẩm, đơn hàng..."
+                }
               />
               <button
                 type="submit"
-                disabled={!aiDraft.trim() || aiStatus === "thinking"}
+                disabled={!aiDraft.trim() || aiStatus === "thinking" || aiRateLimited}
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#ff4500] text-white transition hover:bg-[#e63e00] disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="Gui cau hoi cho AI"
+                aria-label="Gửi câu hỏi cho AI"
               >
                 <span className="material-symbols-outlined">
-                  {aiStatus === "thinking" ? "hourglass_top" : "send"}
+                  {aiStatus === "thinking" || aiRateLimited
+                    ? "hourglass_top"
+                    : "send"}
                 </span>
               </button>
             </div>
+            {aiRateLimited ? (
+              <p className="mt-2 text-xs font-semibold text-orange-700">
+                Gemini đang giới hạn lượt gọi miễn phí. Có thể gửi lại sau{" "}
+                {aiRetrySeconds}s.
+              </p>
+            ) : null}
           </form>
         </section>
       )}
@@ -502,7 +543,7 @@ export default function ChatWidget({ user, onRequestLogin }) {
               type="button"
               onClick={() => setOpen(false)}
               className="rounded-full p-2 text-slate-200 hover:bg-white/10"
-              aria-label="Dong chat"
+              aria-label="Đóng chat"
             >
               <span className="material-symbols-outlined text-xl">close</span>
             </button>
@@ -524,11 +565,11 @@ export default function ChatWidget({ user, onRequestLogin }) {
 
                 <div className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full bg-[#fff1e8] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-[#ff4500]">
                   <span className="h-2 w-2 rounded-full bg-[#ff4500]" />
-                  Da dong
+                  Đã đóng
                 </div>
 
                 <p className="text-lg font-extrabold tracking-tight text-[#111111]">
-                  Cuoc chat da dong
+                  Cuộc chat đã đóng
                 </p>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
                   {closedMessage}
@@ -536,13 +577,13 @@ export default function ChatWidget({ user, onRequestLogin }) {
 
                 <div className="mt-5 rounded-2xl border border-[#ffd6c4] bg-[#fff1e8] px-4 py-3 text-left">
                   <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#ff4500]">
-                    Trang thai hien tai
+                    Trạng thái hiện tại
                   </p>
                   <p className="mt-1 text-sm font-semibold text-[#111111]">
-                    {room?.roomId || "Khong xac dinh room"}
+                    {room?.roomId || "Không xác định room"}
                   </p>
                   <p className="mt-1 text-xs text-slate-600">
-                    Chi can admin mo lai, khung chat se tu chuyen ve che do nhan
+                    Chỉ cần admin mở lại, khung chat sẽ tự chuyển về chế độ nhắn
                     tin.
                   </p>
                 </div>
@@ -553,7 +594,7 @@ export default function ChatWidget({ user, onRequestLogin }) {
                     onClick={() => setOpen(false)}
                     className="rounded-xl border border-[#ffd6c4] bg-white px-4 py-3 text-sm font-semibold text-[#ff4500] transition hover:bg-[#fff1e8]"
                   >
-                    Dong khung chat
+                    Đóng khung chat
                   </button>
                 </div>
               </div>
@@ -563,7 +604,7 @@ export default function ChatWidget({ user, onRequestLogin }) {
               <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 px-4 py-4">
                 {messages.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-600">
-                    Hay gui loi nhan, admin se ho tro ban ngay khi online.
+                    Hãy gửi lời nhắn, admin sẽ hỗ trợ bạn ngay khi online.
                   </div>
                 ) : (
                   messages.map((message) => {
@@ -598,7 +639,7 @@ export default function ChatWidget({ user, onRequestLogin }) {
                               <span className="material-symbols-outlined text-lg">
                                 attach_file
                               </span>
-                              Tep dinh kem
+                              Tệp đính kèm
                             </a>
                           ) : null}
                           <p className="whitespace-pre-wrap wrap-break-word">
@@ -668,13 +709,13 @@ export default function ChatWidget({ user, onRequestLogin }) {
                     disabled={!room || isClosed}
                     rows="1"
                     className="min-h-11 flex-1 resize-none rounded-xl border border-[#ffd6c4] px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#ff4500] focus:ring-4 focus:ring-[#ff4500]/10"
-                    placeholder="Nhap tin nhan..."
+                    placeholder="Nhập tin nhắn..."
                   />
                   <button
                     type="submit"
                     disabled={!draft.trim() || !room || isClosed || sending}
                     className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#ff4500] text-white transition hover:bg-[#e63e00] disabled:cursor-not-allowed disabled:opacity-50"
-                    aria-label={sending ? "Dang gui tin nhan" : "Gui tin nhan"}
+                    aria-label={sending ? "Đang gửi tin nhắn" : "Gửi tin nhắn"}
                   >
                     <span className="material-symbols-outlined">
                       {sending ? "hourglass_top" : "send"}
@@ -683,7 +724,7 @@ export default function ChatWidget({ user, onRequestLogin }) {
                 </div>
                 {status === "uploading" ? (
                   <p className="mt-2 text-xs text-slate-500">
-                    Dang tai tep len...
+                    Đang tải tệp lên...
                   </p>
                 ) : null}
               </form>

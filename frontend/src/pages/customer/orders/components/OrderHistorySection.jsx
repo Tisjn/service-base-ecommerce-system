@@ -78,11 +78,14 @@ export default function OrderHistorySection({
   products,
   ordersLoading,
   orders,
+  orderMeta,
+  statusFilter,
+  onStatusFilterChange,
+  onPageChange,
   orderStats,
   onCancelOrder,
   updatingOrderId,
 }) {
-  const [statusFilter, setStatusFilter] = useState("ALL");
   const [detailState, setDetailState] = useState({
     open: false,
     loading: false,
@@ -115,12 +118,7 @@ export default function OrderHistorySection({
     productLookup[item.productId]?.imageURL ||
     null;
 
-  const filteredOrders = useMemo(() => {
-    if (!orders || statusFilter === "ALL") {
-      return orders;
-    }
-    return orders.filter((order) => order.status === statusFilter);
-  }, [orders, statusFilter]);
+  const filteredOrders = orders || [];
 
   const statusOptions = ["ALL", ...orderStatusOptions];
 
@@ -149,7 +147,7 @@ export default function OrderHistorySection({
       setDetailState({
         open: true,
         loading: false,
-        error: error.message || "Khong tai duoc chi tiet san pham",
+        error: error.message || "Không tải được chi tiết sản phẩm",
         order,
         item,
         data: null,
@@ -188,7 +186,7 @@ export default function OrderHistorySection({
     } catch (error) {
       setDetailState((prev) => ({
         ...prev,
-        error: error.message || "Khong gui duoc binh luan",
+        error: error.message || "Không gửi được bình luận",
       }));
     } finally {
       setCommentSubmitting(false);
@@ -225,7 +223,7 @@ export default function OrderHistorySection({
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-10 text-center text-sm text-slate-500">
           Đang tải lịch sử đơn hàng...
         </div>
-      ) : orders.length === 0 ? (
+      ) : orders.length === 0 && statusFilter === "ALL" ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm text-slate-500">
           Chưa có đơn hàng nào.
         </div>
@@ -241,7 +239,7 @@ export default function OrderHistorySection({
                   <button
                     key={status}
                     type="button"
-                    onClick={() => setStatusFilter(status)}
+                    onClick={() => onStatusFilterChange?.(status)}
                     className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                       statusFilter === status
                         ? "bg-orange-600 text-white shadow-sm"
@@ -258,7 +256,7 @@ export default function OrderHistorySection({
                 <span className="font-semibold text-slate-900">
                   {filteredOrders.length}
                 </span>
-                <span className="text-slate-500">Đơn hàng được hiển thị</span>
+                <span className="text-slate-500">Đơn hàng trên trang này</span>
               </div>
             </div>
           </div>
@@ -421,6 +419,11 @@ export default function OrderHistorySection({
               })
             )}
           </div>
+          <PaginationControls
+            meta={orderMeta}
+            disabled={ordersLoading}
+            onPageChange={onPageChange}
+          />
         </>
       )}
       <ProductDetailModal
@@ -640,6 +643,50 @@ function ProductDetailModal({
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function PaginationControls({ meta, disabled, onPageChange }) {
+  const page = Number(meta?.page || 0);
+  const size = Number(meta?.size || 9);
+  const totalPages = Number(meta?.totalPages || 1);
+  const totalElements = Number(meta?.totalElements || 0);
+  const start = totalElements === 0 ? 0 : page * size + 1;
+  const end = Math.min(totalElements, page * size + size);
+
+  return (
+    <div className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-600 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <p>
+        Hiển thị{" "}
+        <span className="font-extrabold text-slate-950">
+          {start} - {end}
+        </span>{" "}
+        trong số{" "}
+        <span className="font-extrabold text-slate-950">{totalElements}</span>{" "}
+        đơn hàng
+      </p>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          disabled={disabled || page <= 0}
+          onClick={() => onPageChange?.(page - 1)}
+          className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 font-bold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Trước
+        </button>
+        <span className="rounded-2xl bg-orange-600 px-4 py-2 font-extrabold text-white">
+          {page + 1} / {totalPages}
+        </span>
+        <button
+          type="button"
+          disabled={disabled || page + 1 >= totalPages}
+          onClick={() => onPageChange?.(page + 1)}
+          className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-2 font-bold text-orange-700 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Tiếp
+        </button>
       </div>
     </div>
   );

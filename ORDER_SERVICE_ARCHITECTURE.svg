@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { font: 700 40px 'Segoe UI', Arial, sans-serif; fill: #0f172a; }
+      .subtitle { font: 400 18px 'Segoe UI', Arial, sans-serif; fill: #475569; }
+      .section { font: 700 22px 'Segoe UI', Arial, sans-serif; fill: #334155; }
+      .label { font: 700 18px 'Segoe UI', Arial, sans-serif; fill: #0f172a; }
+      .small { font: 400 14px 'Segoe UI', Arial, sans-serif; fill: #475569; }
+      .tiny { font: 400 12px 'Segoe UI', Arial, sans-serif; fill: #64748b; }
+      .actor { fill: #dbeafe; stroke: #2563eb; stroke-width: 2.2; }
+      .service { fill: #dcfce7; stroke: #16a34a; stroke-width: 2.2; }
+      .module { fill: #ecfccb; stroke: #65a30d; stroke-width: 2; }
+      .store { fill: #ffedd5; stroke: #ea580c; stroke-width: 2.2; }
+      .external { fill: #f3e8ff; stroke: #7c3aed; stroke-width: 2.2; }
+      .boundary { fill: rgba(255,255,255,0.58); stroke: #94a3b8; stroke-width: 2.4; stroke-dasharray: 10 8; }
+      .arrow { stroke: #475569; stroke-width: 2.3; fill: none; marker-end: url(#arrowhead); }
+      .dashed { stroke-dasharray: 8 6; }
+      .shadow { filter: drop-shadow(0 8px 18px rgba(15, 23, 42, 0.11)); }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569" />
+    </marker>
+    <linearGradient id="head" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#eff6ff" />
+      <stop offset="100%" stop-color="#f8fafc" />
+    </linearGradient>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1920" height="1080" />
+  <rect x="0" y="0" width="1920" height="102" fill="url(#head)" />
+  <text class="title" x="52" y="52">Order Service Architecture</text>
+  <text class="subtitle" x="52" y="82">Luồng cart, tạo đơn, thanh toán, saga, email và realtime notification</text>
+
+  <text class="section" x="52" y="146">Actors and entry points</text>
+  <rect class="actor shadow" x="44" y="188" rx="18" ry="18" width="170" height="76" />
+  <text class="label" x="129" y="222" text-anchor="middle">Customer</text>
+  <text class="small" x="129" y="245" text-anchor="middle">Frontend / Gateway</text>
+
+  <rect class="actor shadow" x="44" y="286" rx="18" ry="18" width="170" height="76" />
+  <text class="label" x="129" y="320" text-anchor="middle">Admin</text>
+  <text class="small" x="129" y="343" text-anchor="middle">Frontend / Gateway</text>
+
+  <rect class="boundary" x="250" y="142" rx="30" ry="30" width="1320" height="740" />
+  <text class="section" x="282" y="178">System boundary</text>
+
+  <rect class="service shadow" x="330" y="216" rx="18" ry="18" width="240" height="92" />
+  <text class="label" x="450" y="251" text-anchor="middle">API Gateway</text>
+  <text class="small" x="450" y="275" text-anchor="middle">Routes / auth / JWT</text>
+  <text class="tiny" x="450" y="295" text-anchor="middle">Entry for /cart, /orders, /ws</text>
+
+  <rect class="service shadow" x="650" y="216" rx="18" ry="18" width="270" height="92" />
+  <text class="label" x="785" y="251" text-anchor="middle">order-service</text>
+  <text class="small" x="785" y="275" text-anchor="middle">Spring Boot :3004</text>
+  <text class="tiny" x="785" y="295" text-anchor="middle">Orchestrator + Saga + Session cart</text>
+
+  <rect class="service shadow" x="980" y="216" rx="18" ry="18" width="220" height="92" />
+  <text class="label" x="1090" y="251" text-anchor="middle">product-service</text>
+  <text class="small" x="1090" y="275" text-anchor="middle">Reserve / refund inventory</text>
+
+  <rect class="service shadow" x="1240" y="216" rx="18" ry="18" width="220" height="92" />
+  <text class="label" x="1350" y="251" text-anchor="middle">payment-service</text>
+  <text class="small" x="1350" y="275" text-anchor="middle">Create payment / MoMo</text>
+
+  <rect class="module shadow" x="620" y="370" rx="16" ry="16" width="190" height="82" />
+  <text class="label" x="715" y="403" text-anchor="middle">CartService</text>
+  <text class="small" x="715" y="426" text-anchor="middle">Redis cart</text>
+
+  <rect class="module shadow" x="840" y="370" rx="16" ry="16" width="190" height="82" />
+  <text class="label" x="935" y="403" text-anchor="middle">OrderService</text>
+  <text class="small" x="935" y="426" text-anchor="middle">Create / cancel / status</text>
+
+  <rect class="module shadow" x="1060" y="370" rx="16" ry="16" width="220" height="82" />
+  <text class="label" x="1170" y="403" text-anchor="middle">EventPublisherService</text>
+  <text class="small" x="1170" y="426" text-anchor="middle">RabbitMQ publish</text>
+
+  <rect class="module shadow" x="1310" y="370" rx="16" ry="16" width="220" height="82" />
+  <text class="label" x="1420" y="403" text-anchor="middle">OrderEmailService</text>
+  <text class="small" x="1420" y="426" text-anchor="middle">Email confirmation</text>
+
+  <rect class="module shadow" x="620" y="490" rx="16" ry="16" width="190" height="82" />
+  <text class="label" x="715" y="523" text-anchor="middle">OrderWebSocketNotifier</text>
+  <text class="small" x="715" y="546" text-anchor="middle">Realtime admin push</text>
+
+  <rect class="module shadow" x="840" y="490" rx="16" ry="16" width="190" height="82" />
+  <text class="label" x="935" y="523" text-anchor="middle">PaymentServiceClient</text>
+  <text class="small" x="935" y="546" text-anchor="middle">HTTP client</text>
+
+  <rect class="module shadow" x="1060" y="490" rx="16" ry="16" width="190" height="82" />
+  <text class="label" x="1155" y="523" text-anchor="middle">ProductServiceClient</text>
+  <text class="small" x="1155" y="546" text-anchor="middle">HTTP client</text>
+
+  <rect class="store shadow" x="300" y="642" rx="18" ry="18" width="250" height="102" />
+  <text class="label" x="425" y="679" text-anchor="middle">MySQL</text>
+  <text class="small" x="425" y="704" text-anchor="middle">orders, order_items</text>
+  <text class="tiny" x="425" y="726" text-anchor="middle">PENDING / CONFIRMED / SHIPPED</text>
+
+  <rect class="store shadow" x="590" y="642" rx="18" ry="18" width="230" height="102" />
+  <text class="label" x="705" y="679" text-anchor="middle">Redis</text>
+  <text class="small" x="705" y="704" text-anchor="middle">cart:{userId}</text>
+  <text class="tiny" x="705" y="726" text-anchor="middle">TTL 24h</text>
+
+  <rect class="external shadow" x="860" y="642" rx="18" ry="18" width="230" height="102" />
+  <text class="label" x="975" y="679" text-anchor="middle">RabbitMQ</text>
+  <text class="small" x="975" y="704" text-anchor="middle">order.created</text>
+  <text class="tiny" x="975" y="726" text-anchor="middle">inventory / payment / notification</text>
+
+  <rect class="external shadow" x="1120" y="642" rx="18" ry="18" width="210" height="102" />
+  <text class="label" x="1225" y="679" text-anchor="middle">SMTP Gmail</text>
+  <text class="small" x="1225" y="704" text-anchor="middle">Order email</text>
+
+  <rect class="external shadow" x="1360" y="642" rx="18" ry="18" width="200" height="102" />
+  <text class="label" x="1460" y="679" text-anchor="middle">Admin WebSocket</text>
+  <text class="small" x="1460" y="704" text-anchor="middle">New order alerts</text>
+
+  <rect class="external shadow" x="300" y="790" rx="18" ry="18" width="250" height="90" />
+  <text class="label" x="425" y="824" text-anchor="middle">cart API</text>
+  <text class="small" x="425" y="848" text-anchor="middle">GET /cart, POST /cart/items</text>
+
+  <rect class="external shadow" x="590" y="790" rx="18" ry="18" width="230" height="90" />
+  <text class="label" x="705" y="824" text-anchor="middle">order API</text>
+  <text class="small" x="705" y="848" text-anchor="middle">POST /orders, GET /orders</text>
+
+  <rect class="external shadow" x="860" y="790" rx="18" ry="18" width="230" height="90" />
+  <text class="label" x="975" y="824" text-anchor="middle">cancel flow</text>
+  <text class="small" x="975" y="848" text-anchor="middle">Saga rollback / refund</text>
+
+  <rect class="external shadow" x="1120" y="790" rx="18" ry="18" width="210" height="90" />
+  <text class="label" x="1225" y="824" text-anchor="middle">payment flow</text>
+  <text class="small" x="1225" y="848" text-anchor="middle">202 Accepted</text>
+
+  <path class="arrow" d="M214 226 L330 256" />
+  <path class="arrow" d="M214 324 L330 256" />
+  <path class="arrow" d="M570 262 L650 262" />
+  <path class="arrow" d="M920 262 L980 262" />
+  <path class="arrow" d="M1200 262 L1240 262" />
+
+  <path class="arrow" d="M785 308 L785 370" />
+  <path class="arrow" d="M715 452 L715 490" />
+  <path class="arrow" d="M935 452 L935 490" />
+  <path class="arrow" d="M1170 452 L1170 490" />
+  <path class="arrow" d="M1420 452 L1420 642" />
+
+  <path class="arrow" d="M715 452 L425 642" />
+  <path class="arrow" d="M715 452 L705 642" />
+  <path class="arrow" d="M1170 452 L975 642" />
+  <path class="arrow" d="M1170 452 L1225 642" />
+  <path class="arrow" d="M715 452 L1460 642" />
+
+  <path class="arrow" d="M935 452 L705 642" />
+  <path class="arrow" d="M935 452 L975 642" />
+  <path class="arrow" d="M935 452 L1225 642" />
+  <path class="arrow" d="M935 452 L1460 642" />
+
+  <path class="arrow" d="M1090 308 L1090 370" />
+  <path class="arrow" d="M1350 308 L1350 370" />
+
+  <path class="arrow" d="M935 572 L975 642" />
+  <path class="arrow" d="M785 572 L1225 642" />
+
+  <path class="arrow dashed" d="M785 262 L1090 262" />
+  <path class="arrow dashed" d="M785 262 L1350 262" />
+  <path class="arrow dashed" d="M1170 452 L975 642" />
+
+  <text class="tiny" x="330" y="962">Sync path: Gateway → order-service → MySQL / Redis / clients.</text>
+  <text class="tiny" x="330" y="984">Async path: order-service publishes OrderCreated to RabbitMQ, then handlers process inventory, payment, notification, and compensation.</text>
+  <text class="tiny" x="330" y="1006">Admin sees realtime order notifications via WebSocket notifier.</text>
+</svg>

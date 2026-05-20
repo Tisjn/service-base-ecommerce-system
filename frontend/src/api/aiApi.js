@@ -28,3 +28,38 @@ export async function askAiAssistant(question) {
   );
   return response.data;
 }
+
+export function getAiRetryAfterSeconds(error) {
+  const serverValue = Number(error?.response?.data?.retryAfterSeconds);
+  if (Number.isFinite(serverValue) && serverValue > 0) {
+    return Math.ceil(serverValue);
+  }
+
+  const rawMessage = String(
+    error?.response?.data?.message || error?.message || "",
+  );
+  const retryMatch = rawMessage.match(/retry in\s+([0-9]+(?:\.[0-9]+)?)s/i);
+  if (retryMatch) {
+    return Math.max(1, Math.ceil(Number(retryMatch[1])));
+  }
+
+  return error?.response?.status === 429 ? 30 : 0;
+}
+
+export function getAiErrorMessage(error) {
+  const retryAfterSeconds = getAiRetryAfterSeconds(error);
+  if (
+    retryAfterSeconds ||
+    error?.response?.data?.code === "AI_QUOTA_EXCEEDED"
+  ) {
+    return `AI đang hết lượt gọi Gemini miễn phí. Vui lòng thử lại sau khoảng ${
+      retryAfterSeconds || 30
+    } giây.`;
+  }
+
+  return (
+    error?.response?.data?.message ||
+    error?.message ||
+    "Không kết nối được trợ lý AI."
+  );
+}

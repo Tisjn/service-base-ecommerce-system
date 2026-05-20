@@ -12,8 +12,8 @@ export const ADMIN_SECTIONS = {
     folder: "frontend/src/pages/admin/products",
   },
   orders: {
-    title: "Don hang",
-    subtitle: "Quan ly trang thai don hang, thanh toan va van chuyen.",
+    title: "Đơn hàng",
+    subtitle: "Quản lý trạng thái đơn hàng, thanh toán và vận chuyển.",
     icon: "shopping_cart",
     folder: "frontend/src/pages/admin/orders",
   },

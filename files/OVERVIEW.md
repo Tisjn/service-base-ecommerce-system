@@ -1,79 +1,101 @@
 # OVERVIEW — Kiến trúc hệ thống DTPShop
 
+**Updated:** May 20, 2026 | **Status:** ✅ Synchronized with 8 Services
+
+---
+
 ## 1. Tổng quan hệ thống
 
-DTPShop là hệ thống thương mại điện tử theo kiến trúc **Service-Based**, gồm các service độc lập giao tiếp qua **API Gateway**. Hệ thống được thiết kế để đồng thời đáp ứng:
+DTPShop là hệ thống thương mại điện tử theo kiến trúc **Service-Based** với **8 microservices** độc lập giao tiếp qua **API Gateway**. Hệ thống được thiết kế để đồng thời đáp ứng:
 
 - **Đồ án môn học** với các service Spring Boot 3.x trên Java 21, MVC, JPA, Session và REST API
 - **Tiêu chí chấm kiến trúc** gồm JWT, Redis, Docker, CI/CD, Rate Limiter, Retry và AI
 
 ---
 
-## 2. Lý do chọn ngôn ngữ theo từng service
+## 2. 8 Services Chính
 
-> **Nguyên tắc**: Ưu tiên **Spring Boot 3.x trên Java 21** cho các service nghiệp vụ. Chỉ dùng **Node.js** cho lớp hạ tầng gateway và auth khi phù hợp về mặt kỹ thuật.
-
-| Service             | Ngôn ngữ            | Lý do                                                                                              |
-| ------------------- | ------------------- | -------------------------------------------------------------------------------------------------- |
-| **api-gateway**     | **Node.js**         | Gateway nhẹ, tập trung routing/proxy, inject header JWT và rate limit server                       |
-| **auth-service**    | **Node.js**         | Xử lý đăng ký OTP qua SMTP, JWT access/refresh, Redis cho OTP và refresh token                     |
-| **user-service**    | **Spring Boot**     | Quản lý profile người dùng theo mô hình Controller–Service–Repository, phù hợp JPA                 |
-| **product-service** | **Spring Boot**     | Quản lý catalog sản phẩm, cache Redis theo cache-aside, phù hợp Spring Data JPA + Redis            |
-| **order-service**   | **Spring Boot**     | Điều phối giỏ hàng, tạo đơn, payment và notification theo mô hình orchestrator                     |
-| **payment-service** | **Spring Boot**     | Xử lý giao dịch, webhook và refund, cần transaction và audit log rõ ràng                           |
-| **redis-cache**     | Redis 7 (container) | Dùng chung cho auth-service (OTP + refresh token), product-service (cache) và order-service (cart) |
-| **aws-rds-mysql**   | AWS RDS MySQL       | CSDL cloud dùng chung cho các service, mỗi service dùng schema riêng                               |
+| #   | Service             | Port | Ngôn ngữ    | Vai trò                                                    |
+| --- | ------------------- | ---- | ----------- | ---------------------------------------------------------- |
+| 1   | **api-gateway**     | 3000 | Node.js     | Điểm nhập duy nhất, JWT verification, rate limiting        |
+| 2   | **auth-service**    | 3001 | Node.js     | Đăng ký/đăng nhập (OTP+JWT), refresh token, password reset |
+| 3   | **user-service**    | 3002 | Spring Boot | Quản lý hồ sơ người dùng, admin quản lý tài khoản          |
+| 4   | **product-service** | 3003 | Spring Boot | Catalog sản phẩm, Redis cache-aside, giỏ hàng              |
+| 5   | **order-service**   | 3004 | Spring Boot | Orchestrator, guest cart (Redis), tạo đơn, webhook         |
+| 6   | **payment-service** | 3005 | Spring Boot | Xử lý thanh toán (MoMo mock + COD), webhook                |
+| 7   | **chat-service**    | 3007 | Node.js     | Real-time messaging (Socket.io), file upload               |
+| 8   | **ai-service**      | 3009 | Spring Boot | Customer support assistant (Google Gemini)                 |
 
 ---
 
-## 3. Sơ đồ kiến trúc tổng thể
+## 3. Lý do chọn ngôn ngữ theo từng service
+
+> **Nguyên tắc**: Ưu tiên **Spring Boot 3.x trên Java 21** cho business logic. **Node.js** chỉ cho infrastructure (Gateway, Auth OTP, Chat real-time).
+
+| Service             | Ngôn ngữ    | Lý do                                                     |
+| ------------------- | ----------- | --------------------------------------------------------- |
+| **api-gateway**     | Node.js     | Gateway nhẹ, routing/proxy, inject JWT header, rate limit |
+| **auth-service**    | Node.js     | Nodemailer (SMTP OTP), async I/O, JWT + bcrypt            |
+| **user-service**    | Spring Boot | Profile CRUD, JPA repository pattern                      |
+| **product-service** | Spring Boot | Catalog, Redis cache-aside, Spring Data JPA               |
+| **order-service**   | Spring Boot | Orchestration, RabbitMQ events, transaction               |
+| **payment-service** | Spring Boot | Transaction, webhook, audit log                           |
+| **chat-service**    | Node.js     | Socket.io real-time, DynamoDB messages                    |
+| **ai-service**      | Spring Boot | JDBC + context filtering, Gemini API                      |
+
+---
+
+## 4. Sơ đồ kiến trúc tổng thể
 
 ```
-                    ┌─────────────────────────────────────────────┐
-  [User Interface]  │                                             │
-  [Chat AI]    ───► │  API Gateway (Node.js :8080)                │
-                    │  - Routing                                  │
-                    │  - JWT Verify (gọi auth-service)            │
-                    │  - Rate Limiter Server                      │
-                    │  - Inject X-User-* headers                  │
-                    └──────────────┬──────────────────────────────┘
-                                   │
-               ┌───────────────────┼───────────────────────┐
-               │                   │                       │
-               ▼                   ▼                       ▼
-   ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-   │  auth-service    │  │  user-service    │  │ product-service  │
-  │  (Node.js :3001) │  │ (Spring Boot     │  │ (Spring Boot     │
-  │  - OTP SMTP      │  │  :3002)          │  │  :3003)          │
-  │  - JWT access/   │  │  - Profile CRUD  │  │  - Catalog CRUD  │
-  │    refresh       │  │  - Admin mgmt    │  │  - Redis cache   │
-   └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘
-            │                     │                      │
-            ▼                     ▼                      ▼
-   ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-   │  order-service   │  │ payment-service  │  │   redis-cache    │
-  │ (Spring Boot     │  │ (Spring Boot     │  │  (Redis 7)       │
-  │  :3004)          │  │  :3005)          │  │  - OTP TTL 5m    │
-  │  - Orchestrator  │  │  - Webhook       │  │  - Refresh token │
-  │  - Cart Session  │  │  - Refund        │  │  - Product cache │
-  │  - Email notify  │  │  - Gateway adapter│ └──────────────────┘
-   └──────────────────┘  └──────────────────┘
-            │                     │
-            └──────────┬──────────┘
-                       ▼
-              ┌─────────────────┐     ┌─────────────────┐
-              │ AWS RDS MySQL   │     │  AI Provider    │
-              │  - authdb       │     │  (External)     │
-              │  - userdb       │     └─────────────────┘
-              │  - productdb    │     ┌─────────────────┐
-              │  - orderdb      │     │  Email (SMTP)   │
-              │  - paymentdb    │     │  (External)     │
-              └─────────────────┘     └─────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                   Frontend (React 5173)                         │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ HTTP/WebSocket
+                           ▼
+┌──────────────────────────────────────────────────────────────────┐
+│         API Gateway (Node.js :3000)                              │
+│         • Routing to 7 services                                  │
+│         • JWT verification                                       │
+│         • Rate limiting                                          │
+│         • Inject X-User-Id, X-User-Role, X-User-Email headers   │
+└──────┬───────┬─────────┬──────┬────────┬────────┬────────┬──────┘
+       │       │         │      │        │        │        │
+       │ :3001 │ :3002   │:3003 │ :3004  │ :3005  │ :3007  │ :3009
+       ▼       ▼         ▼      ▼        ▼        ▼        ▼
+    ┌────┐ ┌──────┐ ┌──────┐┌───────┐┌────────┐┌──────┐┌────────┐
+    │    │ │User  ││Prod  ││Order  ││Payment ││Chat  ││  AI    │
+    │Auth│ │Srv   ││Srv   ││Srv    ││Srv     ││Srv   ││Srv     │
+    └──┬─┘ └──┬───┘└──┬───┘└───┬───┘└────┬───┘└──┬───┘└────┬───┘
+       │      │       │        │        │       │       │
+    ┌──┴──────┴───────┴────────┴────────┴───────┴───────┴───┐
+    │        AWS RDS MySQL (ecommerce_data)                 │
+    │ ┌────────┬────────┬──────────┬──────────┬──────────┐  │
+    │ │authdb  │userdb  │productdb │orderdb   │paymentdb │  │
+    │ └────────┴────────┴──────────┴──────────┴──────────┘  │
+    └────────────────────────────────────────────────────────┘
+
+    ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+    │  Redis       │  │  RabbitMQ    │  │  DynamoDB    │
+    │  • Product   │  │  • Events    │  │  • Chat msgs │
+    │    cache     │  │  • Order.    │  │  • Upload    │
+    │  • Cart      │  │    created   │  │    files     │
+    │    (24h)     │  │  • Order.    │  │              │
+    │  • Session   │  │    cancelled │  │              │
+    │  • OTP       │  │              │  │              │
+    └──────────────┘  └──────────────┘  └──────────────┘
+
+    ┌──────────────┐  ┌──────────────┐
+    │ AWS S3       │  │ External API │
+    │ • Images     │  │ • Email      │
+    │ • Uploads    │  │ • MoMo Pay   │
+    │ • Avatars    │  │ • Gemini AI  │
+    └──────────────┘  └──────────────┘
 ```
 
 ---
 
-## 4. Đáp ứng yêu cầu Đồ án môn học
+## 5. Đáp ứng yêu cầu Đồ án môn học
 
 | Yêu cầu đồ án                        | Service đáp ứng                 | Ghi chú                                                                                   |
 | ------------------------------------ | ------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -81,13 +103,13 @@ DTPShop là hệ thống thương mại điện tử theo kiến trúc **Service
 | MVC: Controller–Service–Repository   | user, product, order, payment   | Đúng mô hình phân tầng                                                                    |
 | Spring Data JPA                      | user, product, order, payment   | Mapping entity đầy đủ                                                                     |
 | REST API JSON                        | Tất cả services                 | Qua API Gateway                                                                           |
-| Giỏ hàng bằng Session                | order-service                   | HTTP Session trong Spring Boot                                                            |
+| Giỏ hàng bằng Session                | order-service                   | Session chỉ định danh guest cart; dữ liệu cart lưu trong Redis                            |
 | Đăng ký / Đăng nhập / Đăng xuất      | auth-service                    | OTP SMTP + JWT                                                                            |
 | Đặt hàng cho Customer                | order-service                   | Customer kế thừa toàn bộ chức năng Guest và bắt buộc đăng nhập/đăng ký trước khi checkout |
 | Thanh toán đơn hàng (mock)           | order-service + payment-service | Gọi payment-service mock gateway                                                          |
 | Lưu đơn hàng vào CSDL                | order-service                   | Lưu `orders` + `order_items` vào AWS RDS MySQL                                            |
 | Gửi email đặt hàng                   | order-service                   | Spring Mail (SMTP)                                                                        |
-| Xóa Session giỏ hàng sau checkout    | order-service                   | `DEL cart:{userId}` khi tạo đơn thành công                                                |
+| Xóa cart sau checkout                | order-service                   | `DEL cart:{userId}` trong Redis khi tạo đơn thành công                                    |
 | CRUD sản phẩm (Admin)                | product-service                 | Full CRUD + cache invalidation, ẩn/xóa có điều kiện                                       |
 | Quản lý tài khoản (Admin)            | user-service                    | Xem, cập nhật, khoá/mở khoá, xóa có điều kiện                                             |
 | Quản lý đơn hàng (Admin)             | order-service                   | Danh sách tất cả đơn, chi tiết, cập nhật trạng thái                                       |
@@ -248,12 +270,12 @@ networks:
 
 ## 7. Thứ tự implement theo tuần (gợi ý)
 
-| Tuần       | Công việc                                                                                                                                                                                                     |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Tuần 1** | ERD + Use Case + System Diagram. Dựng MySQL schema. Setup Gitlab repo, phân chia nhánh                                                                                                                        |
-| **Tuần 2** | auth-service (Node.js): đăng ký OTP, đăng nhập JWT. product-service (Spring Boot): CRUD sản phẩm + REST API                                                                                                   |
-| **Tuần 3** | user-service + order-service (Spring Boot): giỏ hàng Session, tạo đơn, thanh toán mock, lưu đơn MySQL, email notify, xóa Session giỏ sau khi đặt hàng thành công. api-gateway (Node.js): routing + JWT verify |
-| **Tuần 4** | payment-service. Docker + Docker Compose. Gitlab CI/CD. Deploy online. ReactJS UI. Chat AI                                                                                                                    |
+| Tuần       | Công việc                                                                                                                                                                                                                         |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Tuần 1** | ERD + Use Case + System Diagram. Dựng MySQL schema. Setup Gitlab repo, phân chia nhánh                                                                                                                                            |
+| **Tuần 2** | auth-service (Node.js): đăng ký OTP, đăng nhập JWT. product-service (Spring Boot): CRUD sản phẩm + REST API                                                                                                                       |
+| **Tuần 3** | user-service + order-service (Spring Boot): guest cart theo Session key, lưu cart Redis, tạo đơn, thanh toán mock, lưu đơn MySQL, email notify, xóa cart sau khi đặt hàng thành công. api-gateway (Node.js): routing + JWT verify |
+| **Tuần 4** | payment-service. Docker + Docker Compose. Gitlab CI/CD. Deploy online. ReactJS UI. Chat AI                                                                                                                                        |
 
 ---
 
@@ -261,9 +283,9 @@ networks:
 
 > ⚠️ **Spring Boot services dùng Java 21** theo yêu cầu đồ án. Không dùng Stored Procedure, Trigger, Check Constraint trong CSDL — chỉ validate trong Service layer.
 
-> ⚠️ **Session chỉ dùng cho giỏ hàng** (order-service). Các service khác dùng JWT stateless, không lưu session.
+> ⚠️ **Session chỉ dùng để định danh guest cart** (order-service). Dữ liệu cart thực tế lưu trong Redis. Các service khác dùng JWT stateless, không lưu session.
 
-> ✅ **Rule checkout**: Guest chỉ thao tác xem sản phẩm/giỏ hàng. Muốn `POST /orders` thì bắt buộc đăng nhập/đăng ký để trở thành Customer. Sau khi đặt hàng thành công, order-service xóa Session giỏ hàng (`DEL cart:{userId}`).
+> ✅ **Rule checkout**: Guest chỉ thao tác xem sản phẩm/giỏ hàng. Muốn `POST /orders` thì bắt buộc đăng nhập/đăng ký để trở thành Customer. Sau khi đặt hàng thành công, order-service xóa cart trong Redis (`DEL cart:{userId}`).
 
 > ✅ **Node.js chỉ dùng cho 2 service**: api-gateway (routing/proxy) và auth-service (OTP SMTP + JWT). Cả hai đều không có yêu cầu JPA hay Spring MVC nên không vi phạm tinh thần đồ án.
 

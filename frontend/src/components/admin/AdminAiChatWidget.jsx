@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { askAiAssistant } from "../../api/aiApi";
+import {
+  askAiAssistant,
+  getAiErrorMessage,
+  getAiRetryAfterSeconds,
+} from "../../api/aiApi";
 
 const initialMessages = [
   {
     id: "admin-ai-welcome",
     role: "assistant",
     message:
-      "Xin chao, minh la tro ly AI cho trang quan tri DTPShop. Ban co the hoi ve san pham, don hang, khach hang hoac thao tac van hanh.",
+      "Xin chào, mình là trợ lý AI cho trang quản trị DTPShop. Bạn có thể hỏi về sản phẩm, đơn hàng, khách hàng hoặc thao tác vận hành.",
     timestamp: Date.now(),
   },
 ];
@@ -21,8 +25,11 @@ export default function AdminAiChatWidget({ user }) {
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
+  const [retryUntil, setRetryUntil] = useState(0);
+  const [retrySeconds, setRetrySeconds] = useState(0);
   const bottomRef = useRef(null);
   const adminName = getDisplayName(user);
+  const rateLimited = retrySeconds > 0;
 
   useEffect(() => {
     if (open) {
@@ -30,10 +37,32 @@ export default function AdminAiChatWidget({ user }) {
     }
   }, [messages.length, open, status]);
 
+  useEffect(() => {
+    if (!retryUntil) {
+      setRetrySeconds(0);
+      return undefined;
+    }
+
+    const updateRetrySeconds = () => {
+      const secondsLeft = Math.max(
+        0,
+        Math.ceil((retryUntil - Date.now()) / 1000),
+      );
+      setRetrySeconds(secondsLeft);
+      if (secondsLeft === 0) {
+        setRetryUntil(0);
+      }
+    };
+
+    updateRetrySeconds();
+    const timer = window.setInterval(updateRetrySeconds, 1000);
+    return () => window.clearInterval(timer);
+  }, [retryUntil]);
+
   async function sendQuestion(event) {
     event.preventDefault();
     const question = draft.trim();
-    if (!question || status === "thinking") return;
+    if (!question || status === "thinking" || rateLimited) return;
 
     const userMessage = {
       id: `admin-user-${Date.now()}`,
@@ -56,16 +85,16 @@ export default function AdminAiChatWidget({ user }) {
           role: "assistant",
           message:
             data?.answer ||
-            "AI chua co cau tra loi phu hop. Vui long thu cau hoi khac.",
+            "AI chưa có câu trả lời phù hợp. Vui lòng thử câu hỏi khác.",
           timestamp: Date.now(),
         },
       ]);
     } catch (err) {
-      setError(
-        err?.response?.data?.message ||
-          err.message ||
-          "Khong ket noi duoc tro ly AI.",
-      );
+      const retryAfterSeconds = getAiRetryAfterSeconds(err);
+      if (retryAfterSeconds > 0) {
+        setRetryUntil(Date.now() + retryAfterSeconds * 1000);
+      }
+      setError(getAiErrorMessage(err));
       setDraft(question);
     } finally {
       setStatus("idle");
@@ -79,8 +108,8 @@ export default function AdminAiChatWidget({ user }) {
           type="button"
           onClick={() => setOpen(true)}
           className="fixed bottom-[6.5rem] right-8 z-50 flex h-14 w-14 items-center justify-center rounded-full border border-[#ffd6c4] bg-[#ff4500] text-white shadow-[0_18px_48px_-18px_rgba(255,69,0,0.85)] transition hover:scale-110 hover:bg-[#e63e00] active:scale-95"
-          aria-label="Mo tro ly AI admin"
-          title="Tro ly AI admin"
+          aria-label="Mở trợ lý AI admin"
+          title="Trợ lý AI admin"
         >
           <span className="material-symbols-outlined text-2xl">smart_toy</span>
         </button>
@@ -97,10 +126,10 @@ export default function AdminAiChatWidget({ user }) {
               </div>
               <div className="min-w-0">
                 <p className="truncate text-sm font-extrabold">
-                  Tro ly AI quan tri
+                  Trợ lý AI quản trị
                 </p>
                 <p className="truncate text-xs text-[#ffe5d8]">
-                  Dang ho tro {adminName}
+                  Đang hỗ trợ {adminName}
                 </p>
               </div>
             </div>
@@ -108,7 +137,7 @@ export default function AdminAiChatWidget({ user }) {
               type="button"
               onClick={() => setOpen(false)}
               className="rounded-full p-2 text-white transition hover:bg-white/10"
-              aria-label="Dong tro ly AI"
+              aria-label="Đóng trợ lý AI"
             >
               <span className="material-symbols-outlined text-xl">close</span>
             </button>
@@ -164,7 +193,7 @@ export default function AdminAiChatWidget({ user }) {
                     <span className="h-2 w-2 animate-bounce rounded-full bg-[#ff4500] [animation-delay:-0.1s]" />
                     <span className="h-2 w-2 animate-bounce rounded-full bg-[#ff4500]" />
                   </span>
-                  <span>AI dang tra loi...</span>
+                  <span>AI đang trả lời...</span>
                 </div>
               </div>
             ) : null}
@@ -185,22 +214,34 @@ export default function AdminAiChatWidget({ user }) {
                     sendQuestion(event);
                   }
                 }}
-                disabled={status === "thinking"}
+                disabled={status === "thinking" || rateLimited}
                 rows="1"
                 className="min-h-11 flex-1 resize-none rounded-xl border border-[#ffd6c4] px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#ff4500] focus:ring-4 focus:ring-[#ff4500]/10"
-                placeholder="Hoi AI ve quan tri cua hang..."
+                placeholder={
+                  rateLimited
+                    ? `Chờ ${retrySeconds}s rồi hỏi tiếp...`
+                    : "Hỏi AI về quản trị cửa hàng..."
+                }
               />
               <button
                 type="submit"
-                disabled={!draft.trim() || status === "thinking"}
+                disabled={!draft.trim() || status === "thinking" || rateLimited}
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#ff4500] text-white transition hover:bg-[#e63e00] disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="Gui cau hoi cho AI"
+                aria-label="Gửi câu hỏi cho AI"
               >
                 <span className="material-symbols-outlined">
-                  {status === "thinking" ? "hourglass_top" : "send"}
+                  {status === "thinking" || rateLimited
+                    ? "hourglass_top"
+                    : "send"}
                 </span>
               </button>
             </div>
+            {rateLimited ? (
+              <p className="mt-2 text-xs font-semibold text-orange-700">
+                Gemini đang giới hạn lượt gọi miễn phí. Có thể gửi lại sau{" "}
+                {retrySeconds}s.
+              </p>
+            ) : null}
           </form>
         </section>
       )}

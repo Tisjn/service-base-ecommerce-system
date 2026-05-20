@@ -2,7 +2,7 @@
 
 ## Tổng quan
 
-**order-service** điều phối luồng giỏ hàng, tạo đơn, thanh toán và thông báo theo kiến trúc **Event-Driven Mediator Topology**. Đây là service phức tạp nhất trong hệ thống vì phải xử lý nhiều bước liên tiếp qua **Message Queue (RabbitMQ)** với **Saga Pattern** cho rollback/compensating transactions.
+**order-service** điều phối luồng giỏ hàng, tạo đơn, thanh toán và thông báo theo kiến trúc **Hybrid Orchestrator + Event-Driven**. Đây là service phức tạp nhất trong hệ thống vì vừa xử lý đồng bộ qua HTTP client, vừa phát sự kiện qua **RabbitMQ** cho các bước bất đồng bộ và rollback/compensating transactions.
 
 ## Vai trò trong hệ thống
 
@@ -11,13 +11,13 @@
 | Guest                | Xem danh sách sản phẩm/dịch vụ (lấy từ CSDL)                                               |
 | Guest                | Xem chi tiết sản phẩm/dịch vụ                                                              |
 | Guest                | Thêm sản phẩm/dịch vụ vào giỏ hàng                                                         |
-| Guest                | Xem giỏ hàng (dữ liệu lưu trong Session)                                                   |
+| Guest                | Xem giỏ hàng (Session chỉ định danh guest cart, dữ liệu lưu trong Redis)                   |
 | Guest                | Cập nhật số lượng (0 → xóa khỏi giỏ)                                                       |
 | Customer             | Thực hiện toàn bộ chức năng của Guest                                                      |
 | Customer             | Đăng nhập/đăng xuất qua auth-service                                                       |
 | Customer             | Bắt buộc đăng nhập/đăng ký trước khi đặt hàng                                              |
 | Customer             | Thanh toán đơn hàng (mock), lưu đơn vào CSDL và nhận email/thông báo đặt hàng thành công   |
-| Customer             | Sau khi đặt hàng thành công, Session giỏ hàng sẽ được xóa                                  |
+| Customer             | Sau khi đặt hàng thành công, cart trong Redis sẽ được xóa                                  |
 | Customer             | Xem trạng thái đơn, huỷ đơn nếu chưa xử lý                                                 |
 | Admin                | Xem danh sách đơn hàng (sắp xếp theo ngày), xem chi tiết đơn hàng, cập nhật trạng thái đơn |
 | order-service nội bộ | Gọi product-service, payment-service và email service                                      |
@@ -27,35 +27,36 @@
 - Spring Boot 3.x
 - Java 21
 - **Spring AMQP + RabbitMQ** (Event-Driven Message Broker)
-- Spring Web, Spring Data JPA, Spring Data Redis, Spring Mail, Spring Retry
-- MySQL + Redis
+- Spring Web, Spring Data JPA, Spring Data Redis, Spring Mail, Spring Retry, Spring WebSocket
+- MySQL + Redis + RabbitMQ
 
-## Kiến trúc Event-Driven Mediator Topology
+## Kiến trúc luồng xử lý
 
 ```
-POST /orders (Customer)
+POST /cart/items or POST /orders (via Gateway)
     ↓
-OrderService.create() → save PENDING order
-    ↓
-EventEmitter.publish("OrderCreated") → RabbitMQ
-    ↓ [ASYNC via Message Queue]
-    ├─→ inventory-reserve queue → InventoryHandler
-    │   └─→ check/reserve stock → InventoryReserved/Failed
-    │
-    ├─→ payment-process queue → PaymentHandler
-    │   └─→ process payment → PaymentProcessed/Failed
-    │
-    └─→ notification-send queue → NotificationHandler
-        └─→ send email confirmation
+OrderController.resolveCartKey(HttpSession)
+  ↓
+guest:<sessionId> or <userId>
+  ↓
+CartRepository.saveCart(...) → Redis (TTL 24h)
+  ↓
+OrderService.createOrder(...)
+  ├─→ save PENDING order in MySQL
+  ├─→ paymentServiceClient.createPayment(...) → payment-service
+  ├─→ productServiceClient.reserveInventory(...) → product-service
+  ├─→ eventPublisherService.publishOrderCreated(...) → RabbitMQ
+  ├─→ orderWebSocketNotifier.notifyNewOrder(...) → WebSocket
+  ├─→ cartService.clearCart(...) → Redis delete
+  └─→ orderEmailService.sendOrderPlacedEmail(...) → SMTP
 
-[If PaymentFailed] → Saga Pattern
-    └─→ CompensatingTransactionHandler
-        ├─→ cancel order
-        ├─→ refund inventory
-        └─→ publish "OrderCancelled"
+[If cancel/failure] → OrderService.cancelOrder(...)
+  ├─→ update order status in MySQL
+  ├─→ productServiceClient.refundInventory(...)
+  └─→ eventPublisherService.publishOrderCancelled(...)
 ```
 
-**Return**: 202 Accepted (Workflow continues async)
+**Return**: `202 Accepted` cho tạo đơn; các API cart trả `200/201/204`.
 
 ## Biến môi trường
 
@@ -108,25 +109,26 @@ docker run --rm -p 3004:3004 order-service
 
 > Base path: `/api`
 
-| Endpoint                               | Method | Response | Mô tả                                    |
-| -------------------------------------- | ------ | -------- | ---------------------------------------- |
-| `/api/cart/{userId}`                   | GET    | 200      | Xem giỏ hàng                             |
-| `/api/cart/{userId}/items`             | POST   | 201      | Thêm vào giỏ hàng                        |
-| `/api/cart/{userId}/items/{productId}` | PATCH  | 204      | Cập nhật số lượng / xóa khi quantity = 0 |
-| `/api/cart/{userId}/items/{productId}` | DELETE | 204      | Xóa sản phẩm khỏi giỏ                    |
-| `/api/orders?userId={userId}`          | POST   | **202**  | Tạo đơn (async via Message Queue)        |
-| `/api/orders/{userId}`                 | POST   | **202**  | Tạo đơn cho user cụ thể                  |
-| `/api/orders`                          | GET    | 200      | Danh sách tất cả đơn hàng                |
-| `/api/orders/user/{userId}`            | GET    | 200      | Danh sách đơn của một user               |
-| `/api/orders/{orderId}`                | GET    | 200      | Chi tiết đơn                             |
-| `/api/orders/{orderId}/status`         | PATCH  | 200      | Cập nhật status (Admin)                  |
-| `/api/orders/{orderId}/cancel`         | DELETE | 202      | Hủy đơn (async compensating transaction) |
+| Endpoint                       | Method | Response | Mô tả                                           |
+| ------------------------------ | ------ | -------- | ----------------------------------------------- |
+| `/api/cart`                    | GET    | 200      | Xem giỏ hàng hiện tại                           |
+| `/api/cart/items`              | POST   | 201      | Thêm vào giỏ hàng                               |
+| `/api/cart/items/{productId}`  | PATCH  | 204      | Cập nhật số lượng / xóa khi quantity = 0        |
+| `/api/cart/items/{productId}`  | DELETE | 204      | Xóa sản phẩm khỏi giỏ                           |
+| `/api/cart/session/login`      | POST   | 200      | Đồng bộ guest cart sang user cart khi đăng nhập |
+| `/api/cart/session/logout`     | POST   | 204      | Hủy liên kết user khỏi session hiện tại         |
+| `/api/orders`                  | POST   | **202**  | Tạo đơn (hybrid sync + async orchestration)     |
+| `/api/orders`                  | GET    | 200      | Danh sách tất cả đơn hàng                       |
+| `/api/orders/user/{userId}`    | GET    | 200      | Danh sách đơn của một user                      |
+| `/api/orders/{orderId}`        | GET    | 200      | Chi tiết đơn                                    |
+| `/api/orders/{orderId}/status` | PATCH  | 200      | Cập nhật status (Admin)                         |
+| `/api/orders/{orderId}/cancel` | DELETE | 202      | Hủy đơn (sync update + refund + event publish)  |
 
-**Lưu ý**: `POST /api/orders`, `POST /api/orders/{userId}` và `DELETE /api/orders/{orderId}/cancel` trả về **202 Accepted** vì xử lý async qua Message Queue.
+**Lưu ý**: `POST /api/orders` và `DELETE /api/orders/{orderId}/cancel` trả về `202 Accepted` vì nghiệp vụ chưa hoàn tất toàn bộ tại thời điểm trả response.
 
 ## Ví dụ request
 
-`POST /api/orders?userId=123`
+`POST /api/orders`
 
 ```json
 {
@@ -134,15 +136,7 @@ docker run --rm -p 3004:3004 order-service
 }
 ```
 
-`POST /api/orders/123`
-
-```json
-{
-  "shippingAddress": "123 Nguyễn Trãi, Quận 1, TP.HCM"
-}
-```
-
-`POST /api/cart/123/items`
+`POST /api/cart/items`
 
 ```json
 {
@@ -155,64 +149,26 @@ docker run --rm -p 3004:3004 order-service
 
 ## Ghi chú
 
-### Event-Driven Mediator Topology
+### Luồng xử lý chính
 
-- **Message Broker (RabbitMQ)** đóng vai trò **Mediator** trung tâm điều phối workflow
-- **OrchestratorService** publish `OrderCreated` event → Message Queue (không HTTP call)
-- **Event Handlers** lắng nghe events trong các queue riêng (async):
-  - `InventoryHandler` → check/reserve inventory
-  - `PaymentHandler` → process payment
-  - `NotificationHandler` → send email
-  - `CompensatingTransactionHandler` → rollback if failure
+- `HttpSession` chỉ dùng để định danh guest cart qua `guest:<sessionId>`
+- `CartRepository` lưu dữ liệu cart trong Redis với TTL 24 giờ
+- Khi login hoặc checkout, guest cart được merge sang user cart nếu cần
+- `OrderService.createOrder(...)` lưu đơn `PENDING` vào MySQL, gọi payment/product client, publish event, notify websocket, clear cart và gửi email
 
-### Saga Pattern - Handling Failures
+### Saga / Event Flow
 
-- Nếu **InventoryFailed**: publish event → compensating handler cancel order
-- Nếu **PaymentFailed**: publish event → compensating handler refund inventory + cancel order
-- Automatic **retry** (3x) cho mỗi handler nếu exception
-
-### API Response
-
-- `POST /orders` trả về **202 Accepted** (không phải 200/201)
-  - Client nhận order ID ngay lập tức
-  - Status sẽ update async qua events
-  - Client có thể poll `GET /orders/:id` để track status
+- `EventPublisherService` publish `OrderCreated`, `OrderCancelled`, `PaymentProcessed`, `PaymentFailed`, `InventoryReserved`
+- `cancelOrder(...)` cập nhật trạng thái order, refund inventory và publish `OrderCancelled`
+- Các bước sync hiện tại nằm trong service layer, còn RabbitMQ dùng để mở rộng xử lý bất đồng bộ
 
 ### Redis & Cart
 
-- Giỏ hàng lưu trong Redis với TTL 24 giờ (key: `cart:{userId}`)
-- Sau khi đặt hàng thành công, `CartService` sẽ xóa cart
-
-### Chạy local với RDS (dev)
-
-Nếu bạn muốn chạy `order-service` kết nối tới RDS giống `product`/`auth`, export các biến môi trường hoặc dùng Docker Compose (docker-compose.yml already includes RDS values). Ví dụ khởi bằng Maven với RDS thông tin:
-
-```bash
-cd services/order-service
-mvn -Dmaven.test.skip=true -Dspring-boot.run.jvmArguments="-Dspring.datasource.url=jdbc:mysql://<RDS_HOST>:<RDS_PORT>/<RDS_DB> -Dspring.datasource.username=<RDS_USER> -Dspring.datasource.password=<RDS_PASSWORD> -Dserver.port=3004 -Dspring.jpa.hibernate.ddl-auto=update" spring-boot:run
-```
-
-Ghi chú:
-
-- `ddl-auto=update` chỉ dùng cho môi trường dev để tự tạo/điều chỉnh bảng. Không dùng trong production nếu không muốn thay schema.
-- Nếu Redis chứa dữ liệu cũ với trường không khớp DTO (ví dụ `subtotal`), xóa cache trước khi gọi API:
-
-```bash
-# xóa toàn bộ DB Redis (thận trọng)
-redis-cli -h <redis-host> -p <redis-port> FLUSHDB
-
-# hoặc xóa cart user cụ thể
-redis-cli -h <redis-host> -p <redis-port> DEL cart:1
-```
-
-Hoặc dùng Docker Compose để khởi toàn bộ stack (Redis, RabbitMQ, order-service):
-
-```bash
-docker compose up --build
-```
+- Guest cart dùng key `guest:<sessionId>` khi chưa login
+- User cart dùng key `<userId>` sau khi xác thực
+- Sau khi đặt hàng thành công, `CartService.clearCart(...)` sẽ xóa key Redis tương ứng
 
 ### Testing
 
 - Mock RabbitMQ trong unit tests hoặc dùng `testcontainers` để test integration
-- Verify OrderCreated event được publish
-- Verify Event Handlers xử lý đúng theo flow
+- Verify `createOrder()` lưu order, gọi payment/product client, publish event, notify websocket và clear cart

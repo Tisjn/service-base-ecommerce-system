@@ -21,10 +21,12 @@ import {
   getCategories,
   getProduct,
   getProducts,
+  permanentlyDeleteProduct,
   restoreProduct,
   updateCategory,
   updateProduct,
 } from "../../../api/productApi";
+import { getUserAddressesById, getUserById } from "../../../api/userApi";
 import { formatDateTime } from "../../customer/orders/orderUtils";
 
 const currencyFormatter = new Intl.NumberFormat("vi-VN", {
@@ -34,6 +36,7 @@ const currencyFormatter = new Intl.NumberFormat("vi-VN", {
 });
 
 const PRODUCT_TABLE_PAGE_SIZE = 10;
+const ORDER_TABLE_PAGE_SIZE = 10;
 
 const initialFormState = {
   name: "",
@@ -97,10 +100,22 @@ export default function ProductAdminPage({
   const [adminOrders, setAdminOrders] = useState([]);
   const [adminOrdersLoading, setAdminOrdersLoading] = useState(false);
   const [adminOrdersError, setAdminOrdersError] = useState("");
+  const [adminOrderPage, setAdminOrderPage] = useState(0);
+  const [adminOrderMeta, setAdminOrderMeta] = useState({
+    page: 0,
+    size: ORDER_TABLE_PAGE_SIZE,
+    totalPages: 1,
+    totalElements: 0,
+  });
   const [orderSortDirection, setOrderSortDirection] = useState("desc");
   const [orderFilterDate, setOrderFilterDate] = useState("");
+  const [orderStatusFilter, setOrderStatusFilter] = useState("ALL");
   const [selectedAdminOrderId, setSelectedAdminOrderId] = useState(null);
   const [selectedAdminOrder, setSelectedAdminOrder] = useState(null);
+  const [selectedAdminOrderCustomer, setSelectedAdminOrderCustomer] =
+    useState(null);
+  const [selectedAdminOrderAddress, setSelectedAdminOrderAddress] =
+    useState(null);
   const [selectedAdminOrderComments, setSelectedAdminOrderComments] = useState(
     [],
   );
@@ -108,14 +123,40 @@ export default function ProductAdminPage({
     useState(false);
   const [selectedAdminOrderError, setSelectedAdminOrderError] = useState("");
   const [orderStatusUpdating, setOrderStatusUpdating] = useState(false);
-  const { openedOrderId, closeOrder } = useOrderNotifications() || {
-    openedOrderId: null,
-    closeOrder: () => {},
-  };
+  const { openedOrderId, closeOrder, lastNotification } =
+    useOrderNotifications() || {
+      openedOrderId: null,
+      closeOrder: () => {},
+      lastNotification: null,
+    };
 
   useEffect(() => {
     setActiveAdminSection(initialSection || "products");
   }, [initialSection]);
+
+  useEffect(() => {
+    if (!lastNotification) return;
+
+    loadAdminOrders(0);
+
+    const newOrderId = String(
+      lastNotification.orderId || lastNotification.id || "",
+    );
+    if (newOrderId && String(selectedAdminOrderId) === newOrderId) {
+      loadAdminOrderDetail(newOrderId);
+    }
+  }, [lastNotification, loadAdminOrders, selectedAdminOrderId]);
+
+  useEffect(() => {
+    if (!openedOrderId) return;
+    const orderId = String(openedOrderId);
+    if (!orderId || String(selectedAdminOrderId) === orderId) return;
+
+    setActiveAdminSection("orders");
+    setAdminOrderPage(0);
+    loadAdminOrders(0);
+    openAdminOrderDetail({ id: orderId });
+  }, [openedOrderId, selectedAdminOrderId, loadAdminOrders]);
 
   const stats = useMemo(() => {
     const outOfStock = products.filter(
@@ -205,34 +246,25 @@ export default function ProductAdminPage({
 
   useEffect(() => {
     if (activeAdminSection === "orders") {
-      loadAdminOrders();
+      loadAdminOrders(adminOrderPage);
     }
-  }, [activeAdminSection]);
+  }, [
+    activeAdminSection,
+    adminOrderPage,
+    orderFilterDate,
+    orderSortDirection,
+    orderStatusFilter,
+  ]);
 
-  const filteredAdminOrders = useMemo(() => {
-    const sorted = [...adminOrders].sort((a, b) => {
-      const dateA = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const dateB = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return orderSortDirection === "asc" ? dateA - dateB : dateB - dateA;
-    });
-
-    if (!orderFilterDate) {
-      return sorted;
-    }
-
-    return sorted.filter((order) => {
-      const orderDate = order?.createdAt
-        ? new Date(order.createdAt).toISOString().slice(0, 10)
-        : "";
-      return orderDate === orderFilterDate;
-    });
-  }, [adminOrders, orderSortDirection, orderFilterDate]);
+  const filteredAdminOrders = adminOrders;
 
   function toggleOrderSortDirection() {
+    setAdminOrderPage(0);
     setOrderSortDirection((prev) => (prev === "desc" ? "asc" : "desc"));
   }
 
   function clearOrderFilterDate() {
+    setAdminOrderPage(0);
     setOrderFilterDate("");
   }
 
@@ -254,12 +286,30 @@ export default function ProductAdminPage({
     return () => window.clearTimeout(timer);
   }, [notification]);
 
-  async function loadAdminOrders() {
+  async function loadAdminOrders(page = adminOrderPage) {
     setAdminOrdersLoading(true);
     setAdminOrdersError("");
     try {
-      const data = await orderApi.getAllOrders();
-      setAdminOrders(Array.isArray(data) ? data : []);
+      const data = await orderApi.getAllOrders({
+        page,
+        size: ORDER_TABLE_PAGE_SIZE,
+        status: orderStatusFilter,
+        date: orderFilterDate || undefined,
+        direction: orderSortDirection,
+      });
+      const nextOrders = Array.isArray(data?.content)
+        ? data.content
+        : Array.isArray(data)
+          ? data
+          : [];
+      setAdminOrders(nextOrders);
+      setAdminOrderMeta({
+        page: Number(data?.number ?? page) || 0,
+        size:
+          Number(data?.size ?? ORDER_TABLE_PAGE_SIZE) || ORDER_TABLE_PAGE_SIZE,
+        totalPages: Number(data?.totalPages ?? 1) || 1,
+        totalElements: Number(data?.totalElements ?? nextOrders.length) || 0,
+      });
     } catch (error) {
       setAdminOrdersError(error.message || "Không tải được đơn hàng.");
     } finally {
@@ -267,11 +317,22 @@ export default function ProductAdminPage({
     }
   }
 
+  function handleAdminOrderDateChange(value) {
+    setAdminOrderPage(0);
+    setOrderFilterDate(value);
+  }
+
+  function handleAdminOrderStatusFilterChange(value) {
+    setAdminOrderPage(0);
+    setOrderStatusFilter(value);
+  }
+
   async function loadAdminOrderDetail(orderId) {
     if (!orderId) return;
     setSelectedAdminOrderLoading(true);
     setSelectedAdminOrderError("");
-    setSelectedAdminOrder(null);
+    setSelectedAdminOrderCustomer(null);
+    setSelectedAdminOrderAddress(null);
     setSelectedAdminOrderComments([]);
     try {
       const [orderResult, commentsResult] = await Promise.all([
@@ -282,6 +343,25 @@ export default function ProductAdminPage({
       setSelectedAdminOrderComments(
         Array.isArray(commentsResult) ? commentsResult : [],
       );
+      if (orderResult?.userId) {
+        const [customerResult, addressesResult] = await Promise.allSettled([
+          getUserById(orderResult.userId),
+          getUserAddressesById(orderResult.userId),
+        ]);
+        if (customerResult.status === "fulfilled") {
+          setSelectedAdminOrderCustomer(customerResult.value);
+        }
+        if (addressesResult.status === "fulfilled") {
+          const addresses = Array.isArray(addressesResult.value)
+            ? addressesResult.value
+            : [];
+          setSelectedAdminOrderAddress(
+            addresses.find(
+              (address) => String(address.id) === String(orderResult.addressId),
+            ) || null,
+          );
+        }
+      }
     } catch (error) {
       setSelectedAdminOrderError(
         error.message || "Không tải được chi tiết đơn hàng.",
@@ -293,12 +373,15 @@ export default function ProductAdminPage({
 
   function openAdminOrderDetail(order) {
     const id = order.orderId || order.id;
+    setSelectedAdminOrder(order);
     setSelectedAdminOrderId(id);
   }
 
   function closeAdminOrderDetail() {
     setSelectedAdminOrderId(null);
     setSelectedAdminOrder(null);
+    setSelectedAdminOrderCustomer(null);
+    setSelectedAdminOrderAddress(null);
     setSelectedAdminOrderError("");
   }
 
@@ -309,7 +392,7 @@ export default function ProductAdminPage({
       await orderApi.updateOrderStatus(selectedAdminOrderId, newStatus);
       showNotification("success", `Đã chuyển đơn sang ${newStatus}.`);
       await Promise.all([
-        loadAdminOrders(),
+        loadAdminOrders(adminOrderPage),
         loadAdminOrderDetail(selectedAdminOrderId),
       ]);
     } catch (error) {
@@ -489,6 +572,30 @@ export default function ProductAdminPage({
     }
   }
 
+  async function handlePermanentDeleteProduct(productId) {
+    if (
+      !window.confirm(
+        "Xóa vĩnh viễn sản phẩm này khỏi hệ thống? Hành động này không thể hoàn tác và chỉ áp dụng cho sản phẩm đang bị ẩn.",
+      )
+    )
+      return;
+
+    try {
+      await permanentlyDeleteProduct(productId);
+      showNotification("success", "Đã xóa vĩnh viễn sản phẩm.");
+      const nextPage =
+        products.length <= 1 && pagination.page > 0
+          ? pagination.page - 1
+          : pagination.page;
+      await loadProducts(nextPage);
+    } catch (error) {
+      showNotification(
+        "error",
+        error.message || "Không xóa vĩnh viễn được sản phẩm.",
+      );
+    }
+  }
+
   async function openProductDetail(product) {
     setSelectedDetailProduct(product);
     setDetailProductLoading(true);
@@ -629,7 +736,7 @@ export default function ProductAdminPage({
       <main
         key={activeAdminSection}
         className={`min-h-screen transition-[margin] duration-200 ${
-          sidebarCollapsed ? "lg:ml-20" : "lg:ml-64"
+          sidebarCollapsed ? "ml-20" : "ml-64"
         }`}
       >
         <AdminTopbar
@@ -665,6 +772,7 @@ export default function ProductAdminPage({
             onEditProduct={openEditProductForm}
             onDeleteProduct={handleDeleteProduct}
             onRestoreProduct={handleRestoreProduct}
+            onPermanentDeleteProduct={handlePermanentDeleteProduct}
             onEditCategory={openEditCategoryForm}
             onDeleteCategory={handleDeleteCategory}
           />
@@ -914,18 +1022,24 @@ export default function ProductAdminPage({
           <AdminOrdersPage
             orders={adminOrders}
             filteredOrders={filteredAdminOrders}
+            pagination={adminOrderMeta}
             loading={adminOrdersLoading}
             error={adminOrdersError}
             sortDirection={orderSortDirection}
             filterDate={orderFilterDate}
+            filterStatus={orderStatusFilter}
             selectedOrder={selectedAdminOrderId ? selectedAdminOrder : null}
+            selectedCustomer={selectedAdminOrderCustomer}
+            selectedAddress={selectedAdminOrderAddress}
             comments={selectedAdminOrderComments}
             detailLoading={selectedAdminOrderLoading}
             detailError={selectedAdminOrderError}
             updating={orderStatusUpdating}
             onToggleSort={toggleOrderSortDirection}
-            onFilterDateChange={setOrderFilterDate}
+            onFilterDateChange={handleAdminOrderDateChange}
+            onFilterStatusChange={handleAdminOrderStatusFilterChange}
             onClearFilterDate={clearOrderFilterDate}
+            onPageChange={setAdminOrderPage}
             onOpenOrder={openAdminOrderDetail}
             onCloseDetail={closeAdminOrderDetail}
             onStatusChange={handleAdminOrderStatusUpdate}
@@ -1049,8 +1163,8 @@ export default function ProductAdminPage({
         type="button"
         onClick={() => setActiveAdminSection("support")}
         className="fixed bottom-8 right-8 z-50 flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-white/80 text-[#004ac6] shadow-2xl backdrop-blur-xl transition hover:scale-110 active:scale-95"
-        aria-label="Mo ho tro"
-        title="Mo ho tro"
+        aria-label="Mở hỗ trợ"
+        title="Mở hỗ trợ"
       >
         <span className="material-symbols-outlined text-2xl transition group-hover:rotate-12">
           chat_bubble
@@ -1188,7 +1302,7 @@ function AdminSidebarToggle({
 
   return (
     <aside
-      className={`fixed left-0 top-0 z-50 hidden h-screen flex-col bg-[#f3f3fe] py-6 transition-[width,padding] duration-200 lg:flex ${
+      className={`fixed left-0 top-0 z-50 flex h-screen flex-col bg-[#f3f3fe] py-6 transition-[width,padding] duration-200 ${
         collapsed ? "w-20 px-3" : "w-64 px-4"
       }`}
     >

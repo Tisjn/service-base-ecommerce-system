@@ -24,13 +24,20 @@ export default function AdminDashboardPage({ onSectionChange }) {
     try {
       const [ordersResult, productsResult, categoriesResult] =
         await Promise.allSettled([
-          orderApi.getAllOrders(),
-          getProducts({ page: 0, size: 80, sortBy: "createdAt", direction: "desc" }),
+          orderApi.getAllOrders({ page: 0, size: 10, direction: "desc" }),
+          getProducts({ page: 0, size: 10, sortBy: "createdAt", direction: "desc" }),
           getCategories(),
         ]);
 
       if (ordersResult.status === "fulfilled") {
-        setOrders(Array.isArray(ordersResult.value) ? ordersResult.value : []);
+        const payload = ordersResult.value;
+        setOrders(
+          Array.isArray(payload?.content)
+            ? payload.content
+            : Array.isArray(payload)
+              ? payload
+              : [],
+        );
       }
 
       if (productsResult.status === "fulfilled") {

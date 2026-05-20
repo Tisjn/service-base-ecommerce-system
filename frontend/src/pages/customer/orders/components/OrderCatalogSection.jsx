@@ -155,7 +155,7 @@ export default function OrderCatalogSection({
           <p className="text-xs uppercase tracking-[0.35em] text-orange-600/90 font-semibold">
             Danh mục sản phẩm
           </p>
-          <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-slate-950">
+          <h1 className="!mb-0 !mt-3 text-4xl !font-black tracking-tight !text-slate-950">
             Khám phá bộ sưu tập tinh tế
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
@@ -355,7 +355,7 @@ export default function OrderCatalogSection({
                     <button
                       type="button"
                       className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-slate-800 shadow-[0_14px_34px_-18px_rgba(15,23,42,0.75)] ring-1 ring-slate-950/5 transition hover:scale-105 hover:text-orange-600"
-                      aria-label="Yeu thich san pham"
+                      aria-label="Yêu thích sản phẩm"
                     >
                       <span className="material-symbols-outlined text-2xl">
                         favorite

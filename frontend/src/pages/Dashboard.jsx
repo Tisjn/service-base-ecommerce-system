@@ -16,6 +16,11 @@ function getDisplayName(user) {
   return user?.fullName || user?.email || "Khách hàng";
 }
 
+function getFirstName(user) {
+  const displayName = getDisplayName(user);
+  return displayName.split(" ").filter(Boolean).at(-1) || displayName;
+}
+
 function getInitial(value) {
   return String(value || "K").trim().slice(0, 1).toUpperCase();
 }
@@ -81,41 +86,58 @@ function Dashboard({
 
   const customerPageTitle =
     customerTab === "cart"
-      ? "Giỏ hàng"
+      ? "Giỏ hàng của bạn"
       : customerTab === "history"
-        ? "Đơn hàng"
-        : "Sản phẩm";
+        ? "Theo dõi đơn hàng"
+        : user
+          ? `Xin chào, ${getFirstName(user)}`
+          : "Khám phá DTPShop";
   const pageTitle =
     activeView === "products"
       ? "Quản trị sản phẩm"
       : activeView === "account"
-        ? "Tài khoản"
+        ? `Tài khoản của ${getDisplayName(user)}`
         : customerPageTitle;
   const displayName = getDisplayName(user);
   const avatarUrl = user?.avatarUrl || "";
+  const pageDescription =
+    activeView === "account"
+      ? "Cập nhật hồ sơ, bảo mật và địa chỉ giao hàng để đặt hàng nhanh hơn."
+      : customerTab === "cart"
+        ? "Kiểm tra sản phẩm đã chọn, địa chỉ giao hàng và hoàn tất thanh toán."
+        : customerTab === "history"
+          ? "Theo dõi trạng thái đơn hàng và xem lại lịch sử mua sắm của bạn."
+          : "Chọn sản phẩm phù hợp, thêm vào giỏ hàng và quản lý đơn mua trong một không gian rõ ràng.";
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,0.10),transparent_28%),radial-gradient(circle_at_top_right,rgba(15,23,42,0.06),transparent_30%),linear-gradient(180deg,#fffaf5_0%,#f7f4ef_100%)] px-4 py-5 sm:px-6 lg:px-8">
       <section className="mx-auto grid max-w-7xl gap-6">
         <div className="overflow-hidden rounded-4xl border border-[#ead8cc] bg-white/95 shadow-[0_24px_80px_-42px_rgba(15,23,42,0.34)] backdrop-blur">
           <div className="flex flex-col gap-5 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex min-w-0 items-center gap-5">
+            <div className="flex min-w-0 flex-1 items-center gap-5">
               <BrandLogo className="h-16 w-56 shrink-0 object-contain object-left sm:h-20 sm:w-72" />
               <div className="hidden h-12 w-px bg-[#ead8cc] lg:block" />
               <div className="min-w-0">
-                <h1 className="text-2xl font-extrabold tracking-tight text-slate-950 [font-family:Manrope,system-ui,sans-serif]">
+                <p className="mb-2 text-xs font-extrabold uppercase tracking-[0.24em] text-orange-600">
+                  DTPShop customer
+                </p>
+                <h1 className="!m-0 text-3xl !font-black tracking-tight !text-slate-950 [font-family:Manrope,system-ui,sans-serif] sm:text-4xl">
                   {pageTitle}
                 </h1>
                 <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-                  Mua sắm, theo dõi đơn hàng và quản lý hồ sơ cá nhân trong một
-                  không gian rõ ràng.
+                  {pageDescription}
                 </p>
               </div>
             </div>
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
               {user ? (
-                <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => navigateTo("account")}
+                  className="flex min-w-0 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left transition hover:-translate-y-0.5 hover:border-orange-200 hover:bg-orange-50 focus:outline-none focus:ring-4 focus:ring-orange-100"
+                  aria-label="Mở trang tài khoản"
+                >
                   {avatarUrl ? (
                     <img
                       src={avatarUrl}
@@ -127,52 +149,32 @@ function Dashboard({
                       {getInitial(displayName)}
                     </div>
                   )}
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-extrabold text-slate-950">
+                  <div className="min-w-0 max-w-[280px] sm:max-w-[360px]">
+                    <p className="whitespace-normal break-words text-sm font-extrabold leading-5 text-slate-950">
                       {displayName}
                     </p>
-                    <p className="truncate text-xs text-slate-500">
+                    <p className="mt-0.5 truncate text-xs text-slate-500">
                       {user?.email || "Tài khoản khách hàng"}
                     </p>
                   </div>
-                </div>
+                </button>
               ) : null}
 
               <div className="flex flex-wrap items-center gap-3">
-                <NavButton
-                  active={activeView === "orders" && customerTab === "catalog"}
-                  onClick={() => {
-                    setActiveView("orders");
-                    navigate("/customer/products");
-                  }}
-                >
-                  Sản phẩm
-                </NavButton>
-                <NavButton
-                  active={activeView === "orders" && customerTab === "cart"}
-                  onClick={() => {
-                    setActiveView("orders");
-                    navigate("/customer/cart");
-                  }}
-                >
-                  Giỏ hàng
-                </NavButton>
-                <NavButton
-                  active={activeView === "orders" && customerTab === "history"}
-                  onClick={() => {
-                    setActiveView("orders");
-                    navigate("/customer/orders");
-                  }}
-                >
-                  Đơn hàng
-                </NavButton>
-                {user ? (
-                  <NavButton
-                    active={activeView === "account"}
-                    onClick={() => navigateTo("account")}
+                {activeView === "account" && !isAdmin ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveView("orders");
+                      navigate("/customer/products");
+                    }}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-800 transition hover:-translate-y-0.5 hover:bg-slate-200"
                   >
-                    Tài khoản
-                  </NavButton>
+                    <span className="material-symbols-outlined text-lg">
+                      arrow_back
+                    </span>
+                    Quay lại sản phẩm
+                  </button>
                 ) : null}
                 {isAdmin && (
                   <NavButton

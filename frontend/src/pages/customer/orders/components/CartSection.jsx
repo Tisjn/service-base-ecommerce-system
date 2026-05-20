@@ -50,15 +50,17 @@ export default function CartSection({
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-3xl font-extrabold tracking-tight text-slate-950">
-                Gio hang cua ban
+                Giỏ hàng của bạn
               </h2>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-                Kiem tra san pham, so luong va chon dia chi giao hang truoc khi
-                thanh toan.
+                Kiểm tra sản phẩm, số lượng và chọn địa chỉ giao hàng trước khi
+                thanh toán.
               </p>
             </div>
             <div className="grid gap-2 rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 sm:auto-cols-max sm:grid-flow-col sm:items-center">
-              <div className="font-semibold">{cartSummary.itemCount} san pham</div>
+              <div className="font-semibold">
+                {cartSummary.itemCount} sản phẩm
+              </div>
               <div className="font-semibold text-slate-900">
                 {currencyFormatter.format(cartSummary.subtotal)}
               </div>
@@ -67,11 +69,11 @@ export default function CartSection({
 
           {cartLoading ? (
             <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-10 text-center text-sm text-slate-500">
-              Dang tai gio hang...
+              Đang tải giỏ hàng...
             </div>
           ) : cart.length === 0 ? (
             <div className="mt-6 rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm text-slate-500">
-              Gio hang dang trong. Hay them san pham tu tab Danh muc.
+              Giỏ hàng đang trống. Hãy thêm sản phẩm từ tab Danh mục.
             </div>
           ) : (
             <div className="mt-6 space-y-4">
@@ -104,12 +106,12 @@ export default function CartSection({
                             {item.productName}
                           </h3>
                           <p className="mt-1 text-sm text-slate-500">
-                            Ma san pham #{item.productId}
+                            Mã sản phẩm #{item.productId}
                           </p>
                         </div>
                       </div>
                       <div className="text-right md:text-left">
-                        <p className="text-sm text-slate-500">Gia</p>
+                        <p className="text-sm text-slate-500">Giá</p>
                         <p className="mt-2 text-lg font-bold text-primary">
                           {currencyFormatter.format(item.price || 0)}
                         </p>
@@ -127,7 +129,7 @@ export default function CartSection({
                             )
                           }
                           className="rounded-full p-2 text-slate-700 transition hover:bg-white"
-                          aria-label="Giam so luong"
+                          aria-label="Giảm số lượng"
                         >
                           -
                         </button>
@@ -137,10 +139,13 @@ export default function CartSection({
                         <button
                           type="button"
                           onClick={() =>
-                            onQuantityChange(item.productId, (item.quantity || 0) + 1)
+                            onQuantityChange(
+                              item.productId,
+                              (item.quantity || 0) + 1,
+                            )
                           }
                           className="rounded-full p-2 text-slate-700 transition hover:bg-white"
-                          aria-label="Tang so luong"
+                          aria-label="Tăng số lượng"
                         >
                           +
                         </button>
@@ -148,7 +153,7 @@ export default function CartSection({
 
                       <div className="flex items-center justify-between gap-4">
                         <div className="text-left">
-                          <p className="text-xs text-slate-500">Thanh tien</p>
+                          <p className="text-xs text-slate-500">Thành tiền</p>
                           <p className="text-lg font-black text-slate-950">
                             {currencyFormatter.format(subtotal)}
                           </p>
@@ -158,7 +163,7 @@ export default function CartSection({
                           onClick={() => onRemoveFromCart(item.productId)}
                           className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
                         >
-                          Xoa
+                          Xóa
                         </button>
                       </div>
                     </div>
@@ -174,10 +179,10 @@ export default function CartSection({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-2xl font-extrabold tracking-tight text-slate-950">
-                  Dia chi giao hang
+                  Địa chỉ giao hàng
                 </h2>
                 <p className="mt-2 text-sm text-slate-600">
-                  Chon mot dia chi da luu trong user-service de tao don hang.
+                  Chọn một địa chỉ đã lưu trong user-service để tạo đơn hàng.
                 </p>
               </div>
               <button
@@ -185,19 +190,20 @@ export default function CartSection({
                 onClick={onReloadAddresses}
                 className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
               >
-                Tai lai dia chi
+                Tải lại địa chỉ
               </button>
             </div>
 
             {addresses.length === 0 ? (
               <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
-                Ban chua co dia chi. Hay vao Account Settings &gt; Addresses de
-                them dia chi truoc khi dat hang.
+                Bạn chưa có địa chỉ. Hãy vào Account Settings &gt; Addresses để
+                thêm địa chỉ trước khi đặt hàng.
               </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2">
                 {addresses.map((address) => {
-                  const selected = String(checkout.addressId) === String(address.id);
+                  const selected =
+                    String(checkout.addressId) === String(address.id);
                   return (
                     <label
                       key={address.id}
@@ -223,11 +229,11 @@ export default function CartSection({
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="font-bold text-slate-950">
-                              {address.recipientName || "Nguoi nhan"}
+                              {address.recipientName || "Người nhận"}
                             </p>
                             {address.defaultAddress ? (
                               <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-700">
-                                Mac dinh
+                                Mặc định
                               </span>
                             ) : null}
                           </div>
@@ -240,7 +246,7 @@ export default function CartSection({
                         </span>
                       </div>
                       <p className="mt-4 text-sm leading-6 text-slate-600">
-                        {formatAddress(address) || "Chua nhap dia chi"}
+                        {formatAddress(address) || "Chưa nhập địa chỉ"}
                       </p>
                     </label>
                   );
@@ -250,7 +256,7 @@ export default function CartSection({
 
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <label className="text-sm font-bold text-slate-950">
-                Ghi chu don hang
+                Ghi chú đơn hàng
               </label>
               <textarea
                 rows="3"
@@ -259,14 +265,14 @@ export default function CartSection({
                   setCheckout((prev) => ({ ...prev, note: event.target.value }))
                 }
                 className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
-                placeholder="Vi du: giao gio hanh chinh, goi truoc khi giao..."
+                placeholder="Ví dụ: giao giờ hành chính, gọi trước khi giao..."
               />
             </div>
           </section>
         ) : cart.length > 0 ? (
           <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-center">
             <p className="text-sm text-amber-800">
-              Hay dang nhap de chon dia chi va thanh toan.
+              Hãy đăng nhập để chọn địa chỉ và thanh toán.
             </p>
           </section>
         ) : null}
@@ -277,41 +283,43 @@ export default function CartSection({
           <>
             <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
               <h3 className="text-xl font-extrabold text-slate-950">
-                Tom tat don hang
+                Tóm tắt đơn hàng
               </h3>
               <div className="mt-6 space-y-4 text-sm text-slate-700">
                 <div className="flex items-center justify-between">
-                  <span>Tam tinh</span>
+                  <span>Tạm tính</span>
                   <span className="font-medium text-slate-900">
                     {currencyFormatter.format(cartSummary.subtotal)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span>Van chuyen</span>
+                  <span>Vận chuyển</span>
                   <span
                     className={`font-medium ${
-                      cartSummary.shipping === 0 ? "text-emerald-600" : "text-slate-900"
+                      cartSummary.shipping === 0
+                        ? "text-emerald-600"
+                        : "text-slate-900"
                     }`}
                   >
                     {cartSummary.shipping === 0
-                      ? "Mien phi"
+                      ? "Miễn phí"
                       : currencyFormatter.format(cartSummary.shipping)}
                   </span>
                 </div>
                 <p className="rounded-2xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
-                  Mien phi van chuyen cho don tu 500.000 VND, duoi muc nay phi
-                  van chuyen la 30.000 VND.
+                  Miễn phí vận chuyển cho đơn từ 500.000 VND, dưới mức này phí
+                  vận chuyển là 10.000 VND.
                 </p>
                 <div className="my-4 h-px bg-slate-100" />
                 <div className="flex items-center justify-between text-xl font-extrabold text-slate-950">
-                  <span>Tong cong</span>
+                  <span>Tổng cộng</span>
                   <span>{currencyFormatter.format(cartSummary.total)}</span>
                 </div>
               </div>
 
               <div className="mt-8 rounded-3xl border border-slate-200 bg-slate-50 p-5 text-slate-900 shadow-sm">
                 <p className="text-xs font-bold uppercase tracking-[0.3em] text-slate-500">
-                  Phuong thuc thanh toan
+                  Phương thức thanh toán
                 </p>
                 <div className="mt-4 grid grid-cols-2 gap-3">
                   {[
@@ -341,10 +349,10 @@ export default function CartSection({
                 className="mt-6 w-full rounded-3xl bg-orange-600 py-4 text-sm font-bold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitting
-                  ? "Dang tao don..."
+                  ? "Đang tạo đơn..."
                   : paymentMethod === "MOMO"
-                    ? "Thanh toan MoMo"
-                    : "Dat hang COD"}
+                    ? "Thanh toán MoMo"
+                    : "Đặt hàng COD"}
               </button>
             </div>
 
@@ -352,13 +360,13 @@ export default function CartSection({
               <span className="material-symbols-outlined text-primary">
                 verified_user
               </span>
-              <span>Thong tin thanh toan duoc tao qua payment-service</span>
+              <span>Thông tin thanh toán được tạo qua payment-service</span>
             </div>
           </>
         ) : cart.length > 0 ? (
           <div className="rounded-3xl border border-blue-200 bg-blue-50 p-6 text-center">
             <p className="text-sm text-blue-800">
-              Gio hang tam thoi se duoc dong bo khi ban dang nhap.
+              Giỏ hàng tạm thời sẽ được đồng bộ khi bạn đăng nhập.
             </p>
           </div>
         ) : null}

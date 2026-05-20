@@ -8,31 +8,26 @@ export default function AdminProductCrudPage({
   setFilterDraft,
   stats,
   isLoading,
-  isLoadingMore,
-  hasMoreProducts,
   statusOptions,
   onApplyFilters,
   onResetFilters,
   onLoadProducts,
-  onLoadMoreProducts,
   onCreateCategory,
   onCreateProduct,
   onViewProduct,
   onEditProduct,
   onDeleteProduct,
   onRestoreProduct,
+  onPermanentDeleteProduct,
   onEditCategory,
   onDeleteCategory,
 }) {
-  function handleTableScroll(event) {
-    if (!hasMoreProducts || isLoading || isLoadingMore) return;
-    const element = event.currentTarget;
-    const distanceToBottom =
-      element.scrollHeight - element.scrollTop - element.clientHeight;
-    if (distanceToBottom <= 80) {
-      onLoadMoreProducts?.();
-    }
-  }
+  const page = Number(pagination.page || 0);
+  const size = Number(pagination.size || 10);
+  const totalPages = Number(pagination.totalPages || 1);
+  const totalElements = Number(pagination.totalElements || 0);
+  const start = totalElements === 0 ? 0 : page * size + 1;
+  const end = Math.min(totalElements, page * size + products.length);
 
   return (
     <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-10">
@@ -141,7 +136,7 @@ export default function AdminProductCrudPage({
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-[#c3c6d7]/10 bg-[#f3f3fe] shadow-sm">
-        <div className="max-h-[640px] overflow-auto" onScroll={handleTableScroll}>
+        <div className="max-h-[640px] overflow-auto">
           <table className="w-full border-collapse text-left">
             <thead className="sticky top-0 z-10">
               <tr className="bg-[#e7e7f3]">
@@ -166,28 +161,29 @@ export default function AdminProductCrudPage({
                     onEdit={() => onEditProduct(product)}
                     onDelete={() => onDeleteProduct(product.id)}
                     onRestore={() => onRestoreProduct(product.id)}
+                    onPermanentDelete={() =>
+                      onPermanentDeleteProduct(product.id)
+                    }
                   />
                 ))
               )}
-              {isLoadingMore ? (
-                <EmptyRow text="Äang táº£i thÃªm sáº£n pháº©m..." />
-              ) : null}
             </tbody>
           </table>
         </div>
         <div className="flex flex-col gap-4 border-t border-[#c3c6d7]/20 bg-[#e1e2ed]/30 px-6 py-6 md:flex-row md:items-center md:justify-between">
           <p className="text-sm font-medium text-[#434655]">
-            Đã hiển thị <span className="font-bold text-[#191b23]">{products.length}</span> trong số <span className="font-bold text-[#191b23]">{pagination.totalElements}</span> sản phẩm
+            Hiển thị <span className="font-bold text-[#191b23]">{start} - {end}</span> trong số <span className="font-bold text-[#191b23]">{totalElements}</span> sản phẩm
           </p>
           <div className="flex items-center gap-4">
+            <button type="button" disabled={isLoading || page <= 0} onClick={() => onLoadProducts(page - 1)} className="text-sm font-bold text-[#191b23] disabled:cursor-not-allowed disabled:opacity-40">
+              Trước
+            </button>
             <span className="rounded-lg bg-[#004ac6] px-3 py-2 text-xs font-bold text-white">
-              {hasMoreProducts ? "Cuộn để tải thêm" : "Đã tải hết"}
+              {page + 1} / {totalPages}
             </span>
-            {hasMoreProducts ? (
-              <button type="button" disabled={isLoadingMore} onClick={() => onLoadProducts(pagination.page + 1, { append: true })} className="text-sm font-bold text-[#004ac6] disabled:opacity-40">
-                {isLoadingMore ? "Đang tải..." : "Tải thêm"}
-              </button>
-            ) : null}
+            <button type="button" disabled={isLoading || page + 1 >= totalPages} onClick={() => onLoadProducts(page + 1)} className="text-sm font-bold text-[#004ac6] disabled:cursor-not-allowed disabled:opacity-40">
+              Tiếp
+            </button>
           </div>
         </div>
       </div>
@@ -230,7 +226,14 @@ function EmptyRow({ text, colSpan = 5 }) {
   return <tr><td colSpan={colSpan} className="px-6 py-10 text-center text-sm text-[#737686]">{text}</td></tr>;
 }
 
-function ProductRow({ product, onView, onEdit, onDelete, onRestore }) {
+function ProductRow({
+  product,
+  onView,
+  onEdit,
+  onDelete,
+  onRestore,
+  onPermanentDelete,
+}) {
   const stock = Number(product.stockQuantity || 0);
   const isHidden = product.status === "HIDDEN";
   return (
@@ -254,7 +257,10 @@ function ProductRow({ product, onView, onEdit, onDelete, onRestore }) {
           <button type="button" onClick={onView} className="rounded-lg p-2 text-[#004ac6] transition-colors hover:bg-[#004ac6]/5"><span className="material-symbols-outlined">visibility</span></button>
           <button type="button" onClick={onEdit} className="rounded-lg p-2 text-[#434655] transition-colors hover:bg-[#ededf9]"><span className="material-symbols-outlined">edit</span></button>
           {isHidden ? (
-            <button type="button" onClick={onRestore} className="rounded-lg p-2 text-[#006242] transition-colors hover:bg-[#006242]/10"><span className="material-symbols-outlined">undo</span></button>
+            <>
+              <button type="button" title="Bỏ ẩn sản phẩm" onClick={onRestore} className="rounded-lg p-2 text-[#006242] transition-colors hover:bg-[#006242]/10"><span className="material-symbols-outlined">undo</span></button>
+              <button type="button" title="Xóa vĩnh viễn" onClick={onPermanentDelete} className="rounded-lg p-2 text-[#ba1a1a] transition-colors hover:bg-[#ba1a1a]/10"><span className="material-symbols-outlined">delete_forever</span></button>
+            </>
           ) : (
             <button type="button" onClick={onDelete} className="rounded-lg p-2 text-[#ba1a1a] transition-colors hover:bg-[#ba1a1a]/5"><span className="material-symbols-outlined">delete</span></button>
           )}

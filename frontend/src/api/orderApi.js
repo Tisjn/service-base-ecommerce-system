@@ -139,16 +139,27 @@ export async function createOrder(orderData) {
   return handleResponse(response);
 }
 
-export async function getOrdersByUser(userId) {
-  const response = await requestWithFallback(`/orders/user/${userId}`, {
+function buildOrderQuery({ page, size, status, date, direction } = {}) {
+  const params = new URLSearchParams();
+  if (page != null) params.set("page", page);
+  if (size != null) params.set("size", size);
+  if (status && status !== "ALL") params.set("status", status);
+  if (date) params.set("date", date);
+  if (direction) params.set("direction", direction);
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+export async function getOrdersByUser(userId, options = {}) {
+  const response = await requestWithFallback(`/orders/user/${userId}${buildOrderQuery(options)}`, {
     headers: getAuthHeaders(),
     cache: "no-store",
   });
   return handleResponse(response);
 }
 
-export async function getAllOrders() {
-  const response = await requestWithFallback("/orders", {
+export async function getAllOrders(options = {}) {
+  const response = await requestWithFallback(`/orders${buildOrderQuery(options)}`, {
     headers: getAuthHeaders(),
     cache: "no-store",
   });
@@ -262,6 +273,7 @@ export default {
   getOrderComments,
   getOrderProductDetail,
   getProductDetailWithComments,
+  checkProductOrderHistory,
   addProductComment,
   updateOrderStatus,
   cancelOrder,

@@ -1,0 +1,171 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1120" viewBox="0 0 1600 1120">
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { font: 700 34px 'Segoe UI', Arial, sans-serif; fill: #0f172a; }
+      .subtitle { font: 400 16px 'Segoe UI', Arial, sans-serif; fill: #475569; }
+      .section { font: 700 17px 'Segoe UI', Arial, sans-serif; fill: #334155; }
+      .label { font: 700 16px 'Segoe UI', Arial, sans-serif; fill: #0f172a; }
+      .small { font: 400 12px 'Segoe UI', Arial, sans-serif; fill: #475569; }
+      .actor { fill: #dbeafe; stroke: #2563eb; stroke-width: 2; }
+      .container { fill: #dcfce7; stroke: #16a34a; stroke-width: 2; }
+      .store { fill: #ffedd5; stroke: #ea580c; stroke-width: 2; }
+      .external { fill: #f3e8ff; stroke: #7c3aed; stroke-width: 2; }
+      .boundary { fill: rgba(255,255,255,0.6); stroke: #94a3b8; stroke-width: 2.2; stroke-dasharray: 9 7; }
+      .arrow { stroke: #475569; stroke-width: 2.1; fill: none; marker-end: url(#arrowhead); }
+      .dashed { stroke-dasharray: 7 6; }
+      .shadow { filter: drop-shadow(0 6px 14px rgba(15, 23, 42, 0.12)); }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569" />
+    </marker>
+    <linearGradient id="topGrad" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#eff6ff" />
+      <stop offset="100%" stop-color="#f8fafc" />
+    </linearGradient>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1600" height="1120" />
+  <rect x="0" y="0" width="1600" height="92" fill="url(#topGrad)" />
+  <text class="title" x="44" y="42">DTPShop - C4 Container Diagram</text>
+  <text class="subtitle" x="44" y="68">Chat-service đi qua API Gateway. Bố cục theo cột để dễ đọc và ít giao cắt.</text>
+
+  <text class="section" x="44" y="132">Actors</text>
+  <rect class="actor shadow" x="36" y="165" rx="16" ry="16" width="148" height="70" />
+  <text class="label" x="110" y="197" text-anchor="middle">Customer</text>
+  <text class="small" x="110" y="217" text-anchor="middle">Browser</text>
+
+  <rect class="actor shadow" x="36" y="255" rx="16" ry="16" width="148" height="70" />
+  <text class="label" x="110" y="287" text-anchor="middle">Admin</text>
+  <text class="small" x="110" y="307" text-anchor="middle">Browser</text>
+
+  <rect class="boundary" x="215" y="128" rx="28" ry="28" width="1196" height="674" />
+  <text class="section" x="245" y="160">DTPShop System Boundary</text>
+
+  <rect class="container shadow" x="300" y="190" rx="16" ry="16" width="220" height="86" />
+  <text class="label" x="410" y="222" text-anchor="middle">Frontend React</text>
+  <text class="small" x="410" y="244" text-anchor="middle">Vite app :5173</text>
+
+  <rect class="container shadow" x="620" y="190" rx="16" ry="16" width="240" height="86" />
+  <text class="label" x="740" y="222" text-anchor="middle">API Gateway</text>
+  <text class="small" x="740" y="244" text-anchor="middle">Node.js :8080</text>
+
+  <rect class="container shadow" x="980" y="190" rx="16" ry="16" width="210" height="86" />
+  <text class="label" x="1085" y="222" text-anchor="middle">auth-service</text>
+  <text class="small" x="1085" y="244" text-anchor="middle">Node.js :3001</text>
+
+  <rect class="container shadow" x="1220" y="190" rx="16" ry="16" width="190" height="86" />
+  <text class="label" x="1315" y="222" text-anchor="middle">user-service</text>
+  <text class="small" x="1315" y="244" text-anchor="middle">Spring Boot :3002</text>
+
+  <rect class="container shadow" x="300" y="310" rx="16" ry="16" width="220" height="86" />
+  <text class="label" x="410" y="342" text-anchor="middle">product-service</text>
+  <text class="small" x="410" y="364" text-anchor="middle">Spring Boot :3003</text>
+
+  <rect class="container shadow" x="620" y="310" rx="16" ry="16" width="240" height="86" />
+  <text class="label" x="740" y="342" text-anchor="middle">order-service</text>
+  <text class="small" x="740" y="364" text-anchor="middle">Spring Boot :3004</text>
+
+  <rect class="container shadow" x="980" y="310" rx="16" ry="16" width="210" height="86" />
+  <text class="label" x="1085" y="342" text-anchor="middle">payment-service</text>
+  <text class="small" x="1085" y="364" text-anchor="middle">Spring Boot :3005</text>
+
+  <rect class="container shadow" x="1220" y="310" rx="16" ry="16" width="190" height="86" />
+  <text class="label" x="1315" y="342" text-anchor="middle">ai-service</text>
+  <text class="small" x="1315" y="364" text-anchor="middle">Spring Boot :3009</text>
+
+  <rect class="container shadow" x="620" y="430" rx="16" ry="16" width="240" height="86" />
+  <text class="label" x="740" y="462" text-anchor="middle">chat-service</text>
+  <text class="small" x="740" y="484" text-anchor="middle">Node.js :3008</text>
+
+  <rect class="store shadow" x="280" y="575" rx="16" ry="16" width="220" height="92" />
+  <text class="label" x="390" y="607" text-anchor="middle">AWS RDS MySQL</text>
+  <text class="small" x="390" y="629" text-anchor="middle">authdb, userdb, productdb</text>
+  <text class="small" x="390" y="647" text-anchor="middle">orderdb, paymentdb</text>
+
+  <rect class="store shadow" x="540" y="575" rx="16" ry="16" width="180" height="92" />
+  <text class="label" x="630" y="607" text-anchor="middle">Redis shared</text>
+  <text class="small" x="630" y="629" text-anchor="middle">OTP, token, cart</text>
+  <text class="small" x="630" y="647" text-anchor="middle">product cache</text>
+
+  <rect class="store shadow" x="760" y="575" rx="16" ry="16" width="180" height="92" />
+  <text class="label" x="850" y="607" text-anchor="middle">Redis chat</text>
+  <text class="small" x="850" y="629" text-anchor="middle">Chat notifications</text>
+  <text class="small" x="850" y="647" text-anchor="middle">Socket/session</text>
+
+  <rect class="store shadow" x="980" y="575" rx="16" ry="16" width="200" height="92" />
+  <text class="label" x="1080" y="607" text-anchor="middle">AWS DynamoDB</text>
+  <text class="small" x="1080" y="629" text-anchor="middle">rooms, messages</text>
+  <text class="small" x="1080" y="647" text-anchor="middle">notifications</text>
+
+  <rect class="external shadow" x="1220" y="575" rx="16" ry="16" width="190" height="92" />
+  <text class="label" x="1315" y="607" text-anchor="middle">AWS S3</text>
+  <text class="small" x="1315" y="629" text-anchor="middle">Product images</text>
+  <text class="small" x="1315" y="647" text-anchor="middle">Chat uploads</text>
+
+  <rect class="external shadow" x="280" y="708" rx="16" ry="16" width="180" height="86" />
+  <text class="label" x="370" y="740" text-anchor="middle">SMTP Gmail</text>
+  <text class="small" x="370" y="762" text-anchor="middle">OTP, emails</text>
+
+  <rect class="external shadow" x="490" y="708" rx="16" ry="16" width="180" height="86" />
+  <text class="label" x="580" y="740" text-anchor="middle">Google AI</text>
+  <text class="small" x="580" y="762" text-anchor="middle">Gemini</text>
+
+  <rect class="external shadow" x="700" y="708" rx="16" ry="16" width="180" height="86" />
+  <text class="label" x="790" y="740" text-anchor="middle">MoMo</text>
+  <text class="small" x="790" y="762" text-anchor="middle">Payment gateway</text>
+
+  <rect class="external shadow" x="910" y="708" rx="16" ry="16" width="250" height="86" />
+  <text class="label" x="1035" y="740" text-anchor="middle">Gateway routes for chat</text>
+  <text class="small" x="1035" y="762" text-anchor="middle">/chat, /api/chat, /socket.io, /uploads</text>
+
+  <rect class="external shadow" x="1190" y="708" rx="16" ry="16" width="220" height="86" />
+  <text class="label" x="1300" y="740" text-anchor="middle">WebSocket client</text>
+  <text class="small" x="1300" y="762" text-anchor="middle">Frontend ↔ Gateway</text>
+
+  <path class="arrow" d="M184 200 L300 233" />
+  <path class="arrow" d="M184 290 L300 233" />
+  <path class="arrow" d="M520 233 L620 233" />
+  <path class="arrow" d="M860 233 L980 233" />
+  <path class="arrow" d="M1190 233 L1220 233" />
+
+  <path class="arrow" d="M410 276 L410 310" />
+  <path class="arrow" d="M740 276 L740 310" />
+  <path class="arrow" d="M1085 276 L1085 310" />
+  <path class="arrow" d="M1315 276 L1315 310" />
+  <path class="arrow" d="M740 396 L740 430" />
+
+  <path class="arrow" d="M410 396 L390 575" />
+  <path class="arrow" d="M410 396 L630 575" />
+  <path class="arrow" d="M410 396 L1315 575" />
+
+  <path class="arrow" d="M740 396 L390 575" />
+  <path class="arrow" d="M740 396 L630 575" />
+  <path class="arrow" d="M740 396 L1080 575" />
+  <path class="arrow" d="M740 396 L1315 575" />
+
+  <path class="arrow" d="M1085 396 L390 575" />
+  <path class="arrow" d="M1085 396 L790 708" />
+
+  <path class="arrow" d="M1315 396 L390 575" />
+  <path class="arrow" d="M1315 396 L580 708" />
+
+  <path class="arrow" d="M1085 276 L390 575" />
+  <path class="arrow" d="M1085 276 L370 708" />
+  <path class="arrow" d="M1085 276 L630 575" />
+
+  <path class="arrow" d="M1315 396 L1080 575" />
+  <path class="arrow" d="M1315 396 L1315 575" />
+
+  <path class="arrow" d="M740 480 L850 575" />
+  <path class="arrow" d="M740 480 L1080 575" />
+  <path class="arrow" d="M740 480 L1315 575" />
+
+  <path class="arrow dashed" d="M410 233 L740 233" />
+  <path class="arrow dashed" d="M740 233 L740 430" />
+  <path class="arrow dashed" d="M740 430 L1035 708" />
+  <path class="arrow dashed" d="M740 430 L1300 708" />
+
+  <text class="small" x="630" y="172" text-anchor="middle">Gateway is the single entry point for all HTTP/WebSocket traffic, including chat-service.</text>
+  <text class="small" x="250" y="865">Legend: solid lines = main request/data flow, dashed lines = gateway routing / websocket note.</text>
+</svg>

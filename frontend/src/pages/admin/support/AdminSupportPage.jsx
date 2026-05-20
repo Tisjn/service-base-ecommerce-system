@@ -102,7 +102,7 @@ export default function AdminSupportPage({ user }) {
       setNotice(
         error?.response?.data?.message ||
           error.message ||
-          "Khong tai duoc room",
+          "Không tải được phòng chat",
       );
     } finally {
       setLoadingRooms(false);
@@ -160,7 +160,7 @@ export default function AdminSupportPage({ user }) {
       if (event.userType !== "customer") return;
       window.clearTimeout(typingTimerRef.current);
       if (event.isTyping) {
-        setTypingUser("Khach hang dang soan tin...");
+        setTypingUser("Khách hàng đang soạn tin...");
         typingTimerRef.current = window.setTimeout(
           () => setTypingUser(""),
           1800,
@@ -206,7 +206,7 @@ export default function AdminSupportPage({ user }) {
     });
 
     socket.on("chat_error", (event) =>
-      setNotice(event.message || "Socket bi loi"),
+      setNotice(event.message || "Socket bị lỗi"),
     );
 
     socket.connect();
@@ -249,7 +249,7 @@ export default function AdminSupportPage({ user }) {
           setNotice(
             error?.response?.data?.message ||
               error.message ||
-              "Khong tai duoc tin nhan",
+              "Không tải được tin nhắn",
           );
         }
       } finally {
@@ -328,7 +328,7 @@ export default function AdminSupportPage({ user }) {
       setNotice("");
     } catch (error) {
       setDraft(text);
-      setNotice(error.message || "Khong gui duoc tin nhan");
+      setNotice(error.message || "Không gửi được tin nhắn");
     } finally {
       setSending(false);
     }
@@ -349,13 +349,13 @@ export default function AdminSupportPage({ user }) {
       });
     } catch (error) {
       setNotice(
-        error?.response?.data?.message || error.message || "Upload that bai",
+        error?.response?.data?.message || error.message || "Upload thất bại",
       );
     }
   }
 
   async function handleCloseRoom() {
-    if (!selectedRoom || !window.confirm("Dong cuoc chat nay?")) return;
+    if (!selectedRoom || !window.confirm("Đóng cuộc chat này?")) return;
     try {
       const closed = await closeChatRoom(selectedRoom.roomId);
       setRooms((prev) =>
@@ -369,7 +369,7 @@ export default function AdminSupportPage({ user }) {
       setNotice(
         error?.response?.data?.message ||
           error.message ||
-          "Khong dong duoc room",
+          "Không đóng được phòng chat",
       );
     }
   }
@@ -389,7 +389,7 @@ export default function AdminSupportPage({ user }) {
       setNotice(
         error?.response?.data?.message ||
           error.message ||
-          "Khong mo lai duoc room",
+          "Không mở lại được phòng chat",
       );
     }
   }
@@ -404,10 +404,10 @@ export default function AdminSupportPage({ user }) {
               Support
             </p>
             <h2 className="font-[Manrope,system-ui,sans-serif] text-4xl font-extrabold tracking-tight text-[#111111]">
-              Ho tro khach hang
+              Hỗ trợ khách hàng
             </h2>
             <p className="mt-2 text-[#434655]">
-              Quan ly cac phong chat realtime giua admin va customer.
+              Quản lý các phòng chat realtime giữa admin và customer.
             </p>
           </div>
         </div>
@@ -420,8 +420,8 @@ export default function AdminSupportPage({ user }) {
             }}
             className="azure-input w-44"
           >
-            <option value="closed">Da dong</option>
-            <option value="">Tat ca</option>
+            <option value="closed">Đã đóng</option>
+            <option value="">Tất cả</option>
           </select>
           <button
             type="button"
@@ -429,15 +429,15 @@ export default function AdminSupportPage({ user }) {
             className="azure-button-muted"
           >
             <span className="material-symbols-outlined text-lg">refresh</span>
-            Tai lai
+            Tải lại
           </button>
         </div>
       </div>
 
       <div className="mb-6 grid gap-4 md:grid-cols-4">
-        <SupportStat label="Tong room" value={roomStats.total} />
-        <SupportStat label="Dang mo" value={roomStats.active} />
-        <SupportStat label="Da dong" value={roomStats.closed} />
+        <SupportStat label="Tổng room" value={roomStats.total} />
+        <SupportStat label="Đang mở" value={roomStats.active} />
+        <SupportStat label="Đã đóng" value={roomStats.closed} />
       </div>
 
       {notice ? (
@@ -452,14 +452,14 @@ export default function AdminSupportPage({ user }) {
             <h3 className="font-extrabold text-[#111111]">Phong chat</h3>
             <p className="mt-1 text-sm text-[#737686]">
               {loadingRooms
-                ? "Dang tai..."
-                : `${displayedRooms.length} cuoc hoi thoai`}
+                ? "Đang tải..."
+                : `${displayedRooms.length} cuộc hội thoại`}
             </p>
           </div>
           <div className="max-h-155 overflow-y-auto p-3">
             {displayedRooms.length === 0 ? (
               <p className="rounded-xl bg-white p-4 text-sm text-[#737686]">
-                Chua co phong chat phu hop.
+                Chưa có phòng chat phù hợp.
               </p>
             ) : (
               displayedRooms.map((room) => (
@@ -490,7 +490,7 @@ export default function AdminSupportPage({ user }) {
                     </span>
                   </div>
                   <p className="mt-2 truncate text-sm text-[#434655]">
-                    {room.lastMessage || "Chua co tin nhan"}
+                    {room.lastMessage || "Chưa có tin nhắn"}
                   </p>
                   <p className="mt-2 text-xs text-[#737686]">
                     {formatTime(room.lastMessageAt || room.updatedAt)}
@@ -507,7 +507,7 @@ export default function AdminSupportPage({ user }) {
               <h3 className="truncate font-extrabold text-[#111111]">
                 {selectedRoom
                   ? `${selectedRoom.customerName || selectedRoom.customerEmail || `Customer #${selectedRoom.customerId}`}`
-                  : "Chon room de chat"}
+                  : "Chọn room để chat"}
               </h3>
               <p className="truncate text-sm text-[#737686]">
                 {typingUser || selectedRoom?.roomId || "Realtime Socket.io"}
@@ -544,10 +544,10 @@ export default function AdminSupportPage({ user }) {
 
           <div className="flex-1 space-y-3 overflow-y-auto bg-[radial-gradient(circle_at_top,#fff1e8,#ffffff_55%,#fff8f4_100%)] px-5 py-5">
             {loadingMessages ? (
-              <p className="text-sm text-[#737686]">Dang tai lich su chat...</p>
+              <p className="text-sm text-[#737686]">Đang tải lịch sử chat...</p>
             ) : messages.length === 0 ? (
               <p className="rounded-xl border border-dashed border-[#c3c6d7] bg-white p-5 text-sm text-[#737686]">
-                Chua co tin nhan trong room nay.
+                Chưa có tin nhắn trong room này.
               </p>
             ) : (
               messages.map((message) => {
@@ -582,7 +582,7 @@ export default function AdminSupportPage({ user }) {
                           <span className="material-symbols-outlined text-lg">
                             attach_file
                           </span>
-                          Tep dinh kem
+                          Tệp đính kèm
                         </a>
                       ) : null}
                       <p className="whitespace-pre-wrap wrap-break-word">
@@ -646,8 +646,8 @@ export default function AdminSupportPage({ user }) {
                 className="min-h-11 flex-1 resize-none rounded-lg border border-[#ffd6c4] px-4 py-3 text-sm text-[#111111] outline-none focus:border-[#ff4500] focus:ring-4 focus:ring-[#ff4500]/10"
                 placeholder={
                   selectedRoom?.status === "closed"
-                    ? "Room da dong"
-                    : "Nhap phan hoi cho khach hang..."
+                    ? "Room đã đóng"
+                    : "Nhập phản hồi cho khách hàng..."
                 }
               />
               <button
@@ -663,7 +663,7 @@ export default function AdminSupportPage({ user }) {
                 <span className="material-symbols-outlined text-lg">
                   {sending ? "hourglass_top" : "send"}
                 </span>
-                {sending ? "Dang gui" : "Gui"}
+                {sending ? "Đang gửi" : "Gửi"}
               </button>
             </div>
           </form>

@@ -14,6 +14,8 @@ import com.dtpshop.orderservice.model.OrderItem;
 import com.dtpshop.orderservice.model.OrderStatus;
 import com.dtpshop.orderservice.model.ProductComment;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import com.dtpshop.orderservice.websocket.OrderWebSocketNotifier;
 import com.dtpshop.orderservice.repository.OrderRepository;
 import com.dtpshop.orderservice.repository.ProductCommentRepository;
@@ -29,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderService {
 
     private static final BigDecimal FREE_SHIPPING_THRESHOLD = new BigDecimal("500000");
-    private static final BigDecimal STANDARD_SHIPPING_FEE = new BigDecimal("30000");
+    private static final BigDecimal STANDARD_SHIPPING_FEE = new BigDecimal("10000");
 
     private final OrderRepository orderRepository;
     private final EventPublisherService eventPublisherService;
@@ -171,9 +173,34 @@ public class OrderService {
     }
 
     @Transactional
+    public Page<Order> findOrders(Long userId, OrderStatus status, Pageable pageable) {
+        Page<Order> orders = status == null
+                ? orderRepository.findByUserId(userId, pageable)
+                : orderRepository.findByUserIdAndStatus(userId, status, pageable);
+        orders.getContent().forEach(this::refreshPaymentSnapshot);
+        return orders;
+    }
+
+    @Transactional
     public List<Order> findAllOrders() {
         List<Order> orders = orderRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"));
         orders.forEach(this::refreshPaymentSnapshot);
+        return orders;
+    }
+
+    @Transactional
+    public Page<Order> findAllOrders(OrderStatus status, LocalDateTime start, LocalDateTime end, Pageable pageable) {
+        Page<Order> orders;
+        if (status != null && start != null && end != null) {
+            orders = orderRepository.findByStatusAndCreatedAtBetween(status, start, end, pageable);
+        } else if (status != null) {
+            orders = orderRepository.findByStatus(status, pageable);
+        } else if (start != null && end != null) {
+            orders = orderRepository.findByCreatedAtBetween(start, end, pageable);
+        } else {
+            orders = orderRepository.findAll(pageable);
+        }
+        orders.getContent().forEach(this::refreshPaymentSnapshot);
         return orders;
     }
 

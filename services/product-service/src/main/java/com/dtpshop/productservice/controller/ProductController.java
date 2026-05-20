@@ -125,6 +125,12 @@ public class ProductController {
         return ResponseEntity.ok(productService.restoreProduct(id));
     }
 
+    @DeleteMapping("/products/{id}/permanent")
+    public ResponseEntity<Void> permanentlyDeleteProduct(@PathVariable Long id) {
+        productService.permanentlyDeleteProduct(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PatchMapping("/products/{id}/stock")
     public ResponseEntity<Product> updateStock(@PathVariable Long id,
             @Valid @RequestBody StockUpdateRequest request) {

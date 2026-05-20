@@ -43,6 +43,9 @@ const emptyCheckout = {
   note: "",
 };
 
+const CUSTOMER_CATALOG_PAGE_SIZE = 9;
+const CUSTOMER_ORDER_PAGE_SIZE = 9;
+
 function resolveAccountCandidate(user) {
   if (!user) {
     return null;
@@ -91,7 +94,15 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
   const [catalogPage, setCatalogPage] = useState(0);
   const [catalogMeta, setCatalogMeta] = useState({
     page: 0,
-    size: 8,
+    size: CUSTOMER_CATALOG_PAGE_SIZE,
+    totalPages: 1,
+    totalElements: 0,
+  });
+  const [orderPage, setOrderPage] = useState(0);
+  const [orderStatusFilter, setOrderStatusFilter] = useState("ALL");
+  const [orderMeta, setOrderMeta] = useState({
+    page: 0,
+    size: CUSTOMER_ORDER_PAGE_SIZE,
     totalPages: 1,
     totalElements: 0,
   });
@@ -226,21 +237,43 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
     }
   }, [showNotification]);
 
-  const loadOrders = useCallback(async () => {
-    if (!userId) {
-      return;
-    }
+  const loadOrders = useCallback(
+    async (page = orderPage) => {
+      if (!userId) {
+        setOrders([]);
+        return;
+      }
 
-    setOrdersLoading(true);
-    try {
-      const data = await orderApi.getOrdersByUser(userId);
-      setOrders(Array.isArray(data) ? sortOrdersNewestFirst(data) : []);
-    } catch (error) {
-      showNotification("error", error.message || "Không tải được đơn hàng");
-    } finally {
-      setOrdersLoading(false);
-    }
-  }, [userId, showNotification]);
+      setOrdersLoading(true);
+      try {
+        const data = await orderApi.getOrdersByUser(userId, {
+          page,
+          size: CUSTOMER_ORDER_PAGE_SIZE,
+          status: orderStatusFilter,
+          direction: "desc",
+        });
+        const nextOrders = Array.isArray(data?.content)
+          ? data.content
+          : Array.isArray(data)
+            ? sortOrdersNewestFirst(data)
+            : [];
+        setOrders(nextOrders);
+        setOrderMeta({
+          page: Number(data?.number ?? page) || 0,
+          size:
+            Number(data?.size ?? CUSTOMER_ORDER_PAGE_SIZE) ||
+            CUSTOMER_ORDER_PAGE_SIZE,
+          totalPages: Number(data?.totalPages ?? 1) || 1,
+          totalElements: Number(data?.totalElements ?? nextOrders.length) || 0,
+        });
+      } catch (error) {
+        showNotification("error", error.message || "Không tải được đơn hàng");
+      } finally {
+        setOrdersLoading(false);
+      }
+    },
+    [orderPage, orderStatusFilter, userId, showNotification],
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -251,7 +284,8 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
     }
 
     setActiveTab("history");
-    loadOrders();
+    setOrderPage(0);
+    loadOrders(0);
     showNotification(
       paymentStatus.toUpperCase() === "PAID" ? "success" : "error",
       paymentStatus.toUpperCase() === "PAID"
@@ -289,7 +323,10 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
         return { ...prev, addressId: String(defaultAddress.id) };
       });
     } catch (error) {
-      showNotification("error", error.message || "Không tải được địa chỉ giao hàng");
+      showNotification(
+        "error",
+        error.message || "Không tải được địa chỉ giao hàng",
+      );
     }
   }, [showNotification, userId]);
 
@@ -300,8 +337,17 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
 
     setAdminLoading(true);
     try {
-      const data = await orderApi.getAllOrders();
-      setAdminOrders(Array.isArray(data) ? sortOrdersNewestFirst(data) : []);
+      const data = await orderApi.getAllOrders({
+        page: 0,
+        size: 10,
+        direction: "desc",
+      });
+      const nextOrders = Array.isArray(data?.content)
+        ? data.content
+        : Array.isArray(data)
+          ? sortOrdersNewestFirst(data)
+          : [];
+      setAdminOrders(nextOrders);
     } catch (error) {
       showNotification(
         "error",
@@ -338,7 +384,10 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
             setCart(mergedCart);
           }
         } catch (error) {
-          showNotification("error", error.message || "Không đồng bộ được giỏ hàng.");
+          showNotification(
+            "error",
+            error.message || "Không đồng bộ được giỏ hàng.",
+          );
         }
       }
 
@@ -349,7 +398,6 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
       // Always load cart/orders after merge or just on login
       await Promise.all([
         loadCart(),
-        loadOrders(),
         loadAddresses(),
         isAdmin ? loadAdminOrders() : Promise.resolve(),
       ]);
@@ -365,10 +413,17 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
     loadAdminOrders,
     loadAddresses,
     loadCart,
-    loadOrders,
     showNotification,
     userId,
   ]);
+
+  useEffect(() => {
+    setOrderPage(0);
+  }, [orderStatusFilter, userId]);
+
+  useEffect(() => {
+    loadOrders(orderPage);
+  }, [loadOrders, orderPage]);
 
   const cartSummary = useMemo(() => {
     const itemCount = cart.reduce((sum, item) => sum + (item.quantity || 0), 0);
@@ -376,7 +431,7 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
       (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
       0,
     );
-    const shipping = subtotal >= 500000 || subtotal <= 0 ? 0 : 30000;
+    const shipping = subtotal >= 500000 || subtotal <= 0 ? 0 : 10000;
 
     return {
       itemCount,
@@ -501,11 +556,14 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
       showNotification(
         "success",
         `Đã tạo đơn hàng #${order?.orderCode || order?.orderId || "mới"}. Thanh toán ${
-          paymentMethod.toUpperCase() === "COD" ? "khi nhận hàng" : paymentMethod
+          paymentMethod.toUpperCase() === "COD"
+            ? "khi nhận hàng"
+            : paymentMethod
         }, trạng thái hiện tại: ${getStatusLabel(order?.status || "PENDING")}.`,
       );
       navigateToTab("history");
-      await Promise.all([loadOrders(), loadCart(), loadCatalog()]);
+      setOrderPage(0);
+      await Promise.all([loadOrders(0), loadCart(), loadCatalog()]);
     } catch (error) {
       showNotification("error", error.message || "Không tạo được đơn hàng");
     } finally {
@@ -521,7 +579,7 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
     setUpdatingOrderId(orderId);
     try {
       await orderApi.cancelOrder(orderId, "Customer cancelled");
-      await Promise.all([loadOrders(), loadCatalog()]);
+      await Promise.all([loadOrders(orderPage), loadCatalog()]);
       if (isAdmin) {
         await loadAdminOrders();
       }
@@ -611,6 +669,10 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
             products={products}
             ordersLoading={ordersLoading}
             orders={orders}
+            orderMeta={orderMeta}
+            statusFilter={orderStatusFilter}
+            onStatusFilterChange={setOrderStatusFilter}
+            onPageChange={setOrderPage}
             orderStats={orderStats}
             onCancelOrder={handleCancelOrder}
             updatingOrderId={updatingOrderId}

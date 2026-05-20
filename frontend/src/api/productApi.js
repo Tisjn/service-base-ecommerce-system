@@ -172,6 +172,14 @@ export async function restoreProduct(productId) {
   return handleResponse(response);
 }
 
+export async function permanentlyDeleteProduct(productId) {
+  const response = await requestWithFallback(`/products/${productId}/permanent`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  return handleResponse(response);
+}
+
 export async function getProductDetailWithComments(productId) {
   const response = await requestWithFallback(
     `/admin/products/${productId}/details-with-comments`,
@@ -194,5 +202,6 @@ export default {
   updateProduct,
   deleteProduct,
   restoreProduct,
+  permanentlyDeleteProduct,
   getProductDetailWithComments,
 };

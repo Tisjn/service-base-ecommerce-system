@@ -58,14 +58,18 @@ public class OrderEmailService {
     private String buildBody(Order order) {
         NumberFormat currency = NumberFormat.getCurrencyInstance(new Locale("vi", "VN"));
         StringBuilder body = new StringBuilder();
-        body.append("Don hang cua ban da duoc tao thanh cong.\n\n");
-        body.append("Ma don hang: ").append(order.getOrderCode()).append('\n');
-        body.append("Trang thai: ").append(order.getStatus()).append('\n');
-        body.append("Ma dia chi giao hang: ").append(order.getAddressId()).append('\n');
+
+        body.append("Đơn hàng của bạn đã được tạo thành công.\n\n");
+        body.append("Mã đơn hàng: ").append(order.getOrderCode()).append('\n');
+        body.append("Trạng thái: ").append(order.getStatus()).append('\n');
+        body.append("Mã địa chỉ giao hàng: ").append(order.getAddressId()).append('\n');
+
         if (order.getNote() != null && !order.getNote().isBlank()) {
-            body.append("Ghi chu giao hang: ").append(order.getNote()).append('\n');
+            body.append("Ghi chú giao hàng: ").append(order.getNote()).append('\n');
         }
-        body.append('\n').append("San pham:\n");
+
+        body.append('\n').append("Danh sách sản phẩm:\n");
+
         for (OrderItem item : order.getItems()) {
             body.append("- ")
                     .append(item.getProductName())
@@ -75,10 +79,12 @@ public class OrderEmailService {
                     .append(currency.format(item.getSubtotal()))
                     .append('\n');
         }
+
         body.append('\n');
-        body.append("Tam tinh: ").append(currency.format(order.getSubtotal())).append('\n');
-        body.append("Phi van chuyen: ").append(currency.format(order.getShippingFee())).append('\n');
-        body.append("Tong thanh toan: ").append(currency.format(order.getFinalAmount())).append('\n');
+        body.append("Tạm tính: ").append(currency.format(order.getSubtotal())).append('\n');
+        body.append("Phí vận chuyển: ").append(currency.format(order.getShippingFee())).append('\n');
+        body.append("Tổng thanh toán: ").append(currency.format(order.getFinalAmount())).append('\n');
+
         return body.toString();
     }
 }

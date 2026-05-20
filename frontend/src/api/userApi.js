@@ -32,9 +32,10 @@ function getStoredUser() {
 
 function buildUserHeaders(accessToken) {
   const user = getStoredUser();
+  const token = accessToken || localStorage.getItem("authToken");
   const headers = {};
-  if (accessToken) {
-    headers.Authorization = `Bearer ${accessToken}`;
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
   }
   if (user?.id || user?.userId) {
     headers["X-User-Id"] = String(user.id || user.userId);
@@ -130,6 +131,10 @@ export function listUsers(status) {
 
 export function getUserById(userId) {
   return requestWithFallback("get", `/users/${userId}`);
+}
+
+export function getUserAddressesById(userId) {
+  return requestWithFallback("get", `/users/${userId}/addresses`);
 }
 
 export function updateUserById(userId, data) {

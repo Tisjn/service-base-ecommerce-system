@@ -11,14 +11,21 @@ import com.dtpshop.orderservice.dto.QuantityUpdateDto;
 import com.dtpshop.orderservice.dto.StatusUpdateDto;
 import com.dtpshop.orderservice.model.Order;
 import com.dtpshop.orderservice.model.OrderItem;
+import com.dtpshop.orderservice.model.OrderStatus;
 import com.dtpshop.orderservice.service.CartService;
 import com.dtpshop.orderservice.service.OrderService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -143,13 +150,47 @@ public class OrderController {
     }
 
     @GetMapping("/orders")
-    public ResponseEntity<List<OrderResponseDto>> getAllOrders() {
+    public ResponseEntity<?> getAllOrders(
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "size", required = false) Integer size,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "date", required = false) String date,
+            @RequestParam(value = "direction", defaultValue = "desc") String direction) {
+        if (page != null || size != null || status != null || date != null) {
+            LocalDateTime start = null;
+            LocalDateTime end = null;
+            if (date != null && !date.isBlank()) {
+                LocalDate selectedDate = LocalDate.parse(date.trim());
+                start = selectedDate.atStartOfDay();
+                end = selectedDate.plusDays(1).atStartOfDay();
+            }
+            Page<Order> orders = orderService.findAllOrders(
+                    parseOrderStatus(status),
+                    start,
+                    end,
+                    pageRequest(page, size, direction));
+            return ResponseEntity.ok(orders.map(this::toResponse));
+        }
+
         List<Order> orders = orderService.findAllOrders();
         return ResponseEntity.ok(orders.stream().map(this::toResponse).collect(Collectors.toList()));
     }
 
     @GetMapping("/orders/user/{userId}")
-    public ResponseEntity<List<OrderResponseDto>> getOrdersByUser(@PathVariable("userId") Long userId) {
+    public ResponseEntity<?> getOrdersByUser(
+            @PathVariable("userId") Long userId,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "size", required = false) Integer size,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "direction", defaultValue = "desc") String direction) {
+        if (page != null || size != null || status != null) {
+            Page<Order> orders = orderService.findOrders(
+                    userId,
+                    parseOrderStatus(status),
+                    pageRequest(page, size, direction));
+            return ResponseEntity.ok(orders.map(this::toResponse));
+        }
+
         List<Order> orders = orderService.findOrders(userId);
         return ResponseEntity.ok(orders.stream().map(this::toResponse).collect(Collectors.toList()));
     }
@@ -257,6 +298,27 @@ public class OrderController {
         }
         String requestEmail = requestDto == null ? null : requestDto.getCustomerEmail();
         return requestEmail == null || requestEmail.isBlank() ? null : requestEmail.trim();
+    }
+
+    private Pageable pageRequest(Integer page, Integer size, String direction) {
+        int safePage = page == null ? 0 : page;
+        int safeSize = size == null ? 10 : size;
+        if (safePage < 0 || safeSize < 1 || safeSize > 50) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "page must be >= 0 and size must be between 1 and 50");
+        }
+        Sort.Direction sortDirection = "asc".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return PageRequest.of(safePage, safeSize, Sort.by(sortDirection, "createdAt"));
+    }
+
+    private OrderStatus parseOrderStatus(String status) {
+        if (status == null || status.isBlank() || "ALL".equalsIgnoreCase(status)) {
+            return null;
+        }
+        try {
+            return OrderStatus.valueOf(status.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid order status");
+        }
     }
 
     private OrderResponseDto toResponse(Order order) {
