@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: payment-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://${RDS_HOST:${DB_HOST:localhost}}:${RDS_PORT:${DB_PORT:3306}}/${RDS_DB:${DB_NAME:paymentdb}}?useSSL=${RDS_SSL:${DB_SSL:false}}&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:${RDS_USER:${DB_USER:root}}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${RDS_PASSWORD:${DB_PASSWORD:password}}}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+
+momo:
+  endpoint: ${MOMO_ENDPOINT:https://test-payment.momo.vn/v2/gateway/api/create}
+  partner-code: ${MOMO_PARTNER_CODE:MOMO}
+  access-key: ${MOMO_ACCESS_KEY:}
+  secret-key: ${MOMO_SECRET_KEY:}
+  redirect-url: ${MOMO_REDIRECT_URL:http://localhost:3005/payments/return/momo}
+  ipn-url: ${MOMO_IPN_URL:http://localhost:3005/payments/webhook/momo}
+  frontend-return-url: ${MOMO_FRONTEND_RETURN_URL:http://localhost:5173/customer/orders}
+  request-type: ${MOMO_REQUEST_TYPE:payWithMethod}
+  partner-name: ${MOMO_PARTNER_NAME:DTPShop}
+  store-id: ${MOMO_STORE_ID:DTPShop}
+  lang: ${MOMO_LANG:vi}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+server:
+  port: ${SERVER_PORT:${PORT:3005}}

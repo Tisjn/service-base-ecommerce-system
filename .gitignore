@@ -16,10 +16,10 @@ build_output.txt
 classdump.txt
 
 # Local environment and uploads
+# env
 .env
-.env.*
-!.env.example
-uploads/
+*.env
+**/.env
 
 # Editor and OS files
 .vscode/

@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: order-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://${RDS_HOST:localhost}:${RDS_PORT:3306}/${RDS_DB:orderdb}?useSSL=${RDS_SSL:false}&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:${RDS_USER:root}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${RDS_PASSWORD:password}}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+  data:
+    redis:
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
+      timeout: 60000
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+    virtual-host: ${SPRING_RABBITMQ_VIRTUAL_HOST:/}
+  mail:
+    host: ${SPRING_MAIL_HOST:${SMTP_HOST:}}
+    port: ${SPRING_MAIL_PORT:${SMTP_PORT:587}}
+    username: ${SPRING_MAIL_USERNAME:${SMTP_USER:}}
+    password: ${SPRING_MAIL_PASSWORD:${SMTP_PASS:}}
+    properties:
+      mail:
+        smtp:
+          auth: ${SPRING_MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${SPRING_MAIL_SMTP_STARTTLS_ENABLE:true}
+
+product:
+  service:
+    url: ${PRODUCT_SERVICE_URL:http://localhost:3003}
+payment:
+  service:
+    url: ${PAYMENT_SERVICE_URL:http://localhost:3005}
+notification:
+  email:
+    from: ${NOTIFICATION_EMAIL_FROM:${SPRING_MAIL_USERNAME:${SMTP_USER:no-reply@dtpshop.local}}}
+    subject-prefix: ${NOTIFICATION_EMAIL_SUBJECT_PREFIX:[DTPShop]}
+
+server:
+  port: ${SERVER_PORT:3004}

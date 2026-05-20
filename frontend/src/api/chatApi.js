@@ -8,8 +8,7 @@ const CHAT_SERVICE_URL =
 const CHAT_API_BASE_URL = `${CHAT_SERVICE_URL.replace(/\/+$/, "")}/chat`;
 const CHAT_SOCKET_URL =
   import.meta.env.VITE_CHAT_SOCKET_URL || resolveSocketOrigin(CHAT_SERVICE_URL);
-const CHAT_SOCKET_PATH =
-  import.meta.env.VITE_CHAT_SOCKET_PATH || "/socket.io";
+const CHAT_SOCKET_PATH = import.meta.env.VITE_CHAT_SOCKET_PATH || "/socket.io";
 // All socket traffic should go through the API gateway (VITE_API_GATEWAY_URL)
 
 function resolveSocketOrigin(value) {
@@ -40,7 +39,11 @@ function waitForSocketConnection(socket, timeoutMs) {
     return Promise.reject(new Error("Socket chua san sang"));
   }
 
-  if (typeof socket.connected === "function" ? socket.connected() : socket.connected) {
+  if (
+    typeof socket.connected === "function"
+      ? socket.connected()
+      : socket.connected
+  ) {
     return Promise.resolve();
   }
 
@@ -172,14 +175,14 @@ export async function uploadChatFile(file) {
   );
   return response.data;
 }
-
+// tạo kết nối socket và đăng ký sự kiện, trả về một đối tượng proxy để tương tác với socket mà không cần lo lắng về trạng thái kết nối
 export function createChatSocket() {
   const token = getToken();
   let socket = null;
   let shouldConnect = false;
   const pendingHandlers = [];
   const pendingEmits = [];
-
+  // đảm bảo socket được tạo và kết nối khi cần thiết, đồng thời xử lý các sự kiện và emit đã đăng ký trước đó
   const ensureSocket = () =>
     Promise.resolve().then(() => {
       if (!socket) {
@@ -295,7 +298,12 @@ export function emitChatEvent(socket, eventName, payload, timeoutMs = 8000) {
   );
 }
 
-export function emitChatEventNoAck(socket, eventName, payload, timeoutMs = 8000) {
+export function emitChatEventNoAck(
+  socket,
+  eventName,
+  payload,
+  timeoutMs = 8000,
+) {
   return waitForSocketConnection(socket, timeoutMs).then(() => {
     if (!socket) {
       throw new Error("Socket chua san sang");

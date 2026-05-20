@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: product-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://${RDS_HOST:localhost}:${RDS_PORT:3306}/${RDS_DB:ecommerce_data}?useSSL=${RDS_SSL:false}&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:${RDS_USER:root}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${RDS_PASSWORD:password}}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+  redis:
+    host: ${SPRING_REDIS_HOST:localhost}
+    port: ${SPRING_REDIS_PORT:6379}
+    timeout: 60000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+server:
+  port: ${SERVER_PORT:3003}
