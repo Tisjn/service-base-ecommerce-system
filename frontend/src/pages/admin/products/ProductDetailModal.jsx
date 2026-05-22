@@ -41,6 +41,7 @@ export default function ProductDetailModal({ productId, onClose }) {
   const [hasOrders, setHasOrders] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedImage, setSelectedImage] = useState("");
 
   useEffect(() => {
     if (!productId) return;
@@ -65,6 +66,17 @@ export default function ProductDetailModal({ productId, onClose }) {
 
     loadDetail();
   }, [productId]);
+
+  useEffect(() => {
+    const nextMainImage = detail?.imageUrl || "";
+    const nextDescriptionImages = Array.isArray(detail?.descriptionImageUrls)
+      ? detail.descriptionImageUrls.filter(Boolean)
+      : [];
+    const nextImages = [nextMainImage, ...nextDescriptionImages].filter(
+      Boolean,
+    );
+    setSelectedImage(nextImages[0] || "");
+  }, [detail, productId]);
 
   if (!productId) return null;
 
@@ -116,26 +128,32 @@ export default function ProductDetailModal({ productId, onClose }) {
               {/* Images */}
               {images.length > 0 && (
                 <div className="space-y-4">
-                  <div className="aspect-square overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+                  <div className="aspect-square overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 p-3">
                     <img
-                      src={images[0]}
+                      src={selectedImage || images[0]}
                       alt={detail.productName}
-                      className="h-full w-full object-cover"
+                      className="h-full w-full object-contain"
                     />
                   </div>
                   {images.length > 1 && (
                     <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
                       {images.map((imageUrl, index) => (
-                        <div
+                        <button
+                          type="button"
+                          onClick={() => setSelectedImage(imageUrl)}
                           key={`${imageUrl}-${index}`}
-                          className="aspect-square overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
+                          className={`aspect-square overflow-hidden rounded-2xl border bg-slate-50 p-2 transition hover:border-blue-400 ${
+                            (selectedImage || images[0]) === imageUrl
+                              ? "border-blue-600 ring-2 ring-blue-100"
+                              : "border-slate-200"
+                          }`}
                         >
                           <img
                             src={imageUrl}
                             alt={`${detail.productName} ${index + 1}`}
-                            className="h-full w-full object-cover"
+                            className="h-full w-full object-contain"
                           />
-                        </div>
+                        </button>
                       ))}
                     </div>
                   )}

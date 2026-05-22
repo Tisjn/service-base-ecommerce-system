@@ -31,6 +31,7 @@ export default function ProductDetailSection({
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedImage, setSelectedImage] = useState("");
 
   useEffect(() => {
     if (!initialProduct?.id) {
@@ -91,6 +92,10 @@ export default function ProductDetailSection({
     return [product?.imageUrl, ...gallery].filter(Boolean);
   }, [product]);
 
+  useEffect(() => {
+    setSelectedImage(images[0] || "");
+  }, [images]);
+
   const averageRating = useMemo(() => {
     if (!comments.length) {
       return 0;
@@ -133,12 +138,12 @@ export default function ProductDetailSection({
 
       <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-12 lg:gap-16">
         <div className="space-y-6 lg:col-span-7">
-          <div className="group relative aspect-[4/5] overflow-hidden rounded-[10px] bg-[#f3f3fe]">
+          <div className="relative aspect-[4/5] overflow-hidden rounded-[10px] bg-[#f3f3fe] p-4">
             {images[0] ? (
               <img
-                src={images[0]}
+                src={selectedImage || images[0]}
                 alt={product.name}
-                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                className="h-full w-full object-contain"
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-sm text-slate-400">
@@ -150,19 +155,23 @@ export default function ProductDetailSection({
 
           {images.length > 1 && (
             <div className="grid grid-cols-3 gap-4">
-              {images.slice(1, 4).map((imageUrl, index) => (
-                <div
+              {images.map((imageUrl, index) => (
+                <button
+                  type="button"
+                  onClick={() => setSelectedImage(imageUrl)}
                   key={`${imageUrl}-${index}`}
-                  className={`aspect-square overflow-hidden rounded-xl bg-[#e7e7f3] ${
-                    index === 2 ? "border-2 border-[#004ac6]" : ""
+                  className={`aspect-square overflow-hidden rounded-xl border bg-[#e7e7f3] p-2 transition hover:border-[#004ac6] ${
+                    (selectedImage || images[0]) === imageUrl
+                      ? "border-[#004ac6] ring-2 ring-[#004ac6]/15"
+                      : "border-transparent"
                   }`}
                 >
                   <img
                     src={imageUrl}
                     alt={`${product.name} ${index + 1}`}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain"
                   />
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -179,7 +188,7 @@ export default function ProductDetailSection({
             Bộ sưu tập tuyển chọn
           </div>
 
-          <h1 className="mb-4 font-headline text-5xl font-extrabold leading-[1.1] tracking-tight text-[#191b23]">
+          <h1 className="product-detail-title mb-4 font-headline text-5xl font-extrabold leading-[1.1] tracking-tight">
             {product.name}
           </h1>
 

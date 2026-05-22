@@ -129,18 +129,6 @@ public class OrderService {
             pendingOrder.setPaymentStatus(normalizePaymentStatus(paymentResult.getStatus()));
         }
 
-        // Publish OrderCreated event to other services via AMQP
-        if (eventPublisherService != null) {
-            com.dtpshop.orderservice.event.OrderCreatedEvent evt = new com.dtpshop.orderservice.event.OrderCreatedEvent(
-                    pendingOrder.getId(),
-                    pendingOrder.getUserId(),
-                    String.valueOf(pendingOrder.getAddressId()),
-                    itemsToProcess,
-                    pendingOrder.getFinalAmount(),
-                    "order-" + pendingOrder.getId(),
-                    pendingOrder.getCreatedAt());
-            eventPublisherService.publishOrderCreated(evt);
-        }
         if (productServiceClient != null) {
             boolean reserved = productServiceClient.reserveInventory(itemsToProcess, "order-" + pendingOrder.getId());
             if (!reserved) {

@@ -124,6 +124,11 @@
     transform: translateY(-1px);
   }
 
+  .product-detail-title {
+    color: #191b23 !important;
+    opacity: 1 !important;
+  }
+
   .material-symbols-outlined {
     font-family: "Material Symbols Outlined";
     font-weight: normal;

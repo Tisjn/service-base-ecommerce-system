@@ -2346,6 +2346,11 @@ function ProductDetailAdminModal({
       ? productData.descriptionImageUrls
       : []),
   ].filter(Boolean);
+  const [selectedImage, setSelectedImage] = useState(images[0] || "");
+
+  useEffect(() => {
+    setSelectedImage(images[0] || "");
+  }, [detailData, product?.id]);
 
   const averageRating =
     ratingStats?.averageRating ??
@@ -2381,12 +2386,12 @@ function ProductDetailAdminModal({
       </div>
       <div className="grid gap-6 p-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="space-y-6">
-          <div className="aspect-[4/3] overflow-hidden rounded-3xl bg-[#f3f3fe]">
+          <div className="aspect-[4/3] overflow-hidden rounded-3xl bg-[#f3f3fe] p-3">
             {images[0] ? (
               <img
-                src={images[0]}
+                src={selectedImage || images[0]}
                 alt={productData.name}
-                className="h-full w-full object-cover"
+                className="h-full w-full object-contain"
               />
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-slate-400">
@@ -2397,16 +2402,22 @@ function ProductDetailAdminModal({
           {images.length > 1 && (
             <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
               {images.map((imageUrl, index) => (
-                <div
+                <button
+                  type="button"
+                  onClick={() => setSelectedImage(imageUrl)}
                   key={`${imageUrl}-${index}`}
-                  className="aspect-square overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
+                  className={`aspect-square overflow-hidden rounded-2xl border bg-slate-50 p-2 transition hover:border-[#004ac6] ${
+                    (selectedImage || images[0]) === imageUrl
+                      ? "border-[#004ac6] ring-2 ring-[#004ac6]/15"
+                      : "border-slate-200"
+                  }`}
                 >
                   <img
                     src={imageUrl}
                     alt={`${productData.name || "Sản phẩm"} ${index + 1}`}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain"
                   />
-                </div>
+                </button>
               ))}
             </div>
           )}
