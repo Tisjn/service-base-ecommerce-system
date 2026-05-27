@@ -26,7 +26,21 @@ public class OrderWebSocketNotifier {
             summary.put("createdAt", order.getCreatedAt());
             summary.put("userId", order.getUserId());
             messagingTemplate.convertAndSend("/topic/new_order", summary);
-            logger.info("Notified admins about new order id={}", order.getOrderId());
+            // Also notify the specific user so their UI updates immediately
+            try {
+                var payload = new java.util.HashMap<String, Object>();
+                payload.put("type", "ORDER_CREATED");
+                payload.put("orderId", order.getOrderId());
+                payload.put("userId", order.getUserId());
+                payload.put("status", order.getStatus());
+                payload.put("paymentStatus", order.getPaymentStatus());
+                payload.put("finalAmount", order.getFinalAmount());
+                payload.put("createdAt", order.getCreatedAt());
+                messagingTemplate.convertAndSend("/topic/users/" + order.getUserId() + "/orders", payload);
+            } catch (Exception ex2) {
+                logger.warn("Failed to notify user via WebSocket: {}", ex2.getMessage());
+            }
+            logger.info("Notified admins and user about new order id={}", order.getOrderId());
         } catch (Exception ex) {
             logger.warn("Failed to notify admins via WebSocket: {}", ex.getMessage());
         }

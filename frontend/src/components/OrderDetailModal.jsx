@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import orderApi from "../api/orderApi";
 import useOrderSocket from "../hooks/useOrderSocket";
+import { formatDateTime } from "../pages/customer/orders/orderUtils";
 
 export default function OrderDetailModal({ orderId, onClose }) {
   const [order, setOrder] = useState(null);
@@ -79,7 +80,7 @@ export default function OrderDetailModal({ orderId, onClose }) {
                 Khách hàng: User #{order.userId}
               </div>
               <div className="text-sm text-slate-700">
-                Ngày tạo: {new Date(order.createdAt).toLocaleString()}
+                Ngày tạo: {formatDateTime(order.createdAt)}
               </div>
               <div className="text-sm text-slate-700">
                 Tổng:{" "}

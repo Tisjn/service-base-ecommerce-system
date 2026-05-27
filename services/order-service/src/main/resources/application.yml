@@ -49,6 +49,10 @@ product:
 payment:
   service:
     url: ${PAYMENT_SERVICE_URL:http://localhost:3005}
+service:
+  http:
+    connect-timeout-ms: ${SERVICE_HTTP_CONNECT_TIMEOUT_MS:1000}
+    read-timeout-ms: ${SERVICE_HTTP_READ_TIMEOUT_MS:2500}
 notification:
   email:
     from: ${NOTIFICATION_EMAIL_FROM:${SPRING_MAIL_USERNAME:${SMTP_USER:no-reply@dtpshop.local}}}

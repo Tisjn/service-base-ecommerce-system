@@ -1,7 +1,7 @@
 package com.dtpshop.productservice.controller;
 
 import com.dtpshop.productservice.dto.InventoryRequest;
-import com.dtpshop.productservice.service.ProductService;
+import com.dtpshop.productservice.service.InventoryService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -13,21 +13,21 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/inventory")
 public class InventoryController {
 
-    private final ProductService productService;
+    private final InventoryService inventoryService;
 
-    public InventoryController(ProductService productService) {
-        this.productService = productService;
+    public InventoryController(InventoryService inventoryService) {
+        this.inventoryService = inventoryService;
     }
 
     @PostMapping("/reserve")
     public ResponseEntity<Void> reserveInventory(@Valid @RequestBody InventoryRequest request) {
-        productService.reserveInventory(request);
+        inventoryService.reserveInventory(request);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/refund")
     public ResponseEntity<Void> refundInventory(@Valid @RequestBody InventoryRequest request) {
-        productService.refundInventory(request);
+        inventoryService.refundInventory(request);
         return ResponseEntity.noContent().build();
     }
 }

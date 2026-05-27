@@ -64,6 +64,9 @@ public class PaymentServiceClient {
             }
         } catch (Exception ex) {
             logger.warn("Payment service unavailable for orderId={}: {}", orderId, ex.getMessage());
+            if ("MOMO".equalsIgnoreCase(paymentMethod)) {
+                return new PaymentResult(false, null, null, null);
+            }
             return fallbackApproval(orderId, paymentMethod);
         }
         return new PaymentResult(false, null, null, null);
@@ -82,10 +85,12 @@ public class PaymentServiceClient {
                 Object paymentId = firstPresent(payment, "id", "paymentId");
                 Object method = payment.get("paymentMethod");
                 Object status = payment.get("status");
+                Object paymentUrl = payment.get("paymentUrl");
                 return new PaymentSnapshot(
                         paymentId == null ? null : paymentId.toString(),
                         method == null ? null : method.toString(),
-                        status == null ? null : status.toString());
+                        status == null ? null : status.toString(),
+                        paymentUrl == null ? null : paymentUrl.toString());
             }
         } catch (Exception ex) {
             logger.warn("Cannot fetch payment status for orderId={}: {}", orderId, ex.getMessage());
@@ -145,11 +150,13 @@ public class PaymentServiceClient {
         private final String paymentId;
         private final String paymentMethod;
         private final String status;
+        private final String paymentUrl;
 
-        public PaymentSnapshot(String paymentId, String paymentMethod, String status) {
+        public PaymentSnapshot(String paymentId, String paymentMethod, String status, String paymentUrl) {
             this.paymentId = paymentId;
             this.paymentMethod = paymentMethod;
             this.status = status;
+            this.paymentUrl = paymentUrl;
         }
 
         public String getPaymentId() {
@@ -162,6 +169,10 @@ public class PaymentServiceClient {
 
         public String getStatus() {
             return status;
+        }
+
+        public String getPaymentUrl() {
+            return paymentUrl;
         }
     }
 }

@@ -1,9 +1,6 @@
-const env = require("../config/env");
 const userRepository = require("../repositories/user.repository");
-const otpRepository = require("../repositories/otp.repository");
-const { generateOTP } = require("../utils/otp.utils");
-const { hashPassword } = require("../utils/hash.utils");
-const { sendOtpEmail } = require("../utils/mailer.utils");
+const otpService = require("./otp.service");
+const passwordEncoder = require("./passwordEncoder.service");
 const AppError = require("../utils/httpError");
 
 function normalizeEmail(email) {
@@ -15,63 +12,28 @@ async function sendRegisterOtp({ email, password, fullName, avatarUrl }) {
   const existingUser = await userRepository.findByEmail(normalizedEmail);
 
   if (existingUser) {
-    throw new AppError(409, "Email đã tồn tại");
+    throw new AppError(409, "Email da ton tai");
   }
 
-  const hashedPassword = await hashPassword(password);
-  const otp = generateOTP();
-
-  await otpRepository.setRegisterOtp(
-    normalizedEmail,
-    {
-      otp,
-      hashedPassword,
-      fullName: String(fullName).trim(),
-      avatarUrl: avatarUrl ? String(avatarUrl).trim() : null,
-      attempts: 0,
-    },
-    env.otp.ttlSeconds,
-  );
-
-  await sendOtpEmail(normalizedEmail, otp, "register", fullName);
+  await otpService.createRegisterOtp(normalizedEmail, {
+    hashedPassword: await passwordEncoder.hash(password),
+    fullName: String(fullName).trim(),
+    avatarUrl: avatarUrl ? String(avatarUrl).trim() : null,
+  });
 
   return {
-    message: "OTP đã được gửi đến email của bạn",
+    message: "OTP da duoc gui den email cua ban",
   };
 }
 
 async function verifyRegisterOtp({ email, otp }) {
   const normalizedEmail = normalizeEmail(email);
-  const otpData = await otpRepository.getRegisterOtp(normalizedEmail);
-
-  if (!otpData) {
-    throw new AppError(400, "OTP đã hết hạn hoặc không tồn tại");
-  }
-
-  if (String(otpData.otp) !== String(otp)) {
-    const nextAttempts = (otpData.attempts || 0) + 1;
-
-    if (nextAttempts >= env.otp.maxAttempts) {
-      await otpRepository.deleteRegisterOtp(normalizedEmail);
-      throw new AppError(429, "OTP sai quá 3 lần. Vui lòng gửi lại OTP");
-    }
-
-    await otpRepository.updateRegisterOtp(
-      normalizedEmail,
-      {
-        ...otpData,
-        attempts: nextAttempts,
-      },
-      env.otp.ttlSeconds,
-    );
-
-    throw new AppError(400, "OTP không đúng");
-  }
+  const otpData = await otpService.verifyRegisterOtp(normalizedEmail, otp);
 
   const existed = await userRepository.findByEmail(normalizedEmail);
   if (existed) {
-    await otpRepository.deleteRegisterOtp(normalizedEmail);
-    throw new AppError(409, "Email đã tồn tại");
+    await otpService.deleteRegisterOtp(normalizedEmail);
+    throw new AppError(409, "Email da ton tai");
   }
 
   await userRepository.createUser({
@@ -83,10 +45,10 @@ async function verifyRegisterOtp({ email, otp }) {
     status: "active",
   });
 
-  await otpRepository.deleteRegisterOtp(normalizedEmail);
+  await otpService.deleteRegisterOtp(normalizedEmail);
 
   return {
-    message: "Đăng ký thành công",
+    message: "Dang ky thanh cong",
   };
 }
 

@@ -14,8 +14,11 @@ import com.dtpshop.productservice.model.Category;
 import com.dtpshop.productservice.model.Product;
 import com.dtpshop.productservice.model.ProductStatus;
 import com.dtpshop.productservice.service.CategoryService;
+import com.dtpshop.productservice.service.CartService;
 import com.dtpshop.productservice.service.ImageUploadService;
-import com.dtpshop.productservice.service.ProductService;
+import com.dtpshop.productservice.service.InventoryService;
+import com.dtpshop.productservice.service.ProductCommandService;
+import com.dtpshop.productservice.service.ProductQueryService;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.util.List;
@@ -42,13 +45,20 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api")
 public class ProductController {
 
-    private final ProductService productService;
+    private final ProductQueryService productQueryService;
+    private final ProductCommandService productCommandService;
+    private final InventoryService inventoryService;
+    private final CartService cartService;
     private final CategoryService categoryService;
     private final ImageUploadService imageUploadService;
 
-    public ProductController(ProductService productService, CategoryService categoryService,
+    public ProductController(ProductQueryService productQueryService, ProductCommandService productCommandService,
+            InventoryService inventoryService, CartService cartService, CategoryService categoryService,
             ImageUploadService imageUploadService) {
-        this.productService = productService;
+        this.productQueryService = productQueryService;
+        this.productCommandService = productCommandService;
+        this.inventoryService = inventoryService;
+        this.cartService = cartService;
         this.categoryService = categoryService;
         this.imageUploadService = imageUploadService;
     }
@@ -80,13 +90,13 @@ public class ProductController {
         };
         Sort.Direction sortDirection = Sort.Direction.fromString(direction);
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, orderBy));
-        return ResponseEntity.ok(productService.listProducts(categoryId, productStatus, search, minPrice,
+        return ResponseEntity.ok(productQueryService.listProducts(categoryId, productStatus, search, minPrice,
                 maxPrice, pageable));
     }
 
     @GetMapping("/products/{id}")
     public ResponseEntity<Product> getProduct(@PathVariable Long id) {
-        return ResponseEntity.ok(productService.getProduct(id));
+        return ResponseEntity.ok(productQueryService.getProduct(id));
     }
 
     @PostMapping("/product-images")
@@ -106,46 +116,46 @@ public class ProductController {
 
     @PostMapping("/products")
     public ResponseEntity<Product> createProduct(@Valid @RequestBody ProductRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(productService.createProduct(request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(productCommandService.createProduct(request));
     }
 
     @PatchMapping("/products/{id}")
     public ResponseEntity<Product> updateProduct(@PathVariable Long id,
             @Valid @RequestBody ProductUpdateRequest request) {
-        return ResponseEntity.ok(productService.updateProduct(id, request));
+        return ResponseEntity.ok(productCommandService.updateProduct(id, request));
     }
 
     @DeleteMapping("/products/{id}")
     public ResponseEntity<Product> softDeleteProduct(@PathVariable Long id) {
-        return ResponseEntity.ok(productService.softDeleteProduct(id));
+        return ResponseEntity.ok(productCommandService.softDeleteProduct(id));
     }
 
     @PatchMapping("/products/{id}/restore")
     public ResponseEntity<Product> restoreProduct(@PathVariable Long id) {
-        return ResponseEntity.ok(productService.restoreProduct(id));
+        return ResponseEntity.ok(productCommandService.restoreProduct(id));
     }
 
     @DeleteMapping("/products/{id}/permanent")
     public ResponseEntity<Void> permanentlyDeleteProduct(@PathVariable Long id) {
-        productService.permanentlyDeleteProduct(id);
+        productCommandService.permanentlyDeleteProduct(id);
         return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/products/{id}/stock")
     public ResponseEntity<Product> updateStock(@PathVariable Long id,
             @Valid @RequestBody StockUpdateRequest request) {
-        return ResponseEntity.ok(productService.updateStock(id, request.getStockQuantity()));
+        return ResponseEntity.ok(productCommandService.updateStock(id, request.getStockQuantity()));
     }
 
     @GetMapping("/cart/{userId}")
     public ResponseEntity<List<CartItemResponse>> getCart(@PathVariable String userId,
             @RequestHeader(value = "X-Guest-Token", required = false) String guestToken) {
         if ("guest".equals(userId) && guestToken != null) {
-            return ResponseEntity.ok(productService.getCartByGuestToken(guestToken));
+            return ResponseEntity.ok(cartService.getCartByGuestToken(guestToken));
         }
         try {
             Long userIdLong = Long.parseLong(userId);
-            return ResponseEntity.ok(productService.getCart(userIdLong));
+            return ResponseEntity.ok(cartService.getCart(userIdLong));
         } catch (NumberFormatException e) {
             return ResponseEntity.badRequest().build();
         }
@@ -156,11 +166,11 @@ public class ProductController {
             @Valid @RequestBody CartItemRequest request,
             @RequestHeader(value = "X-Guest-Token", required = false) String guestToken) {
         if ("guest".equals(userId) && guestToken != null) {
-            productService.addCartItemByGuestToken(guestToken, request);
+            cartService.addItemByGuestToken(guestToken, request);
         } else {
             try {
                 Long userIdLong = Long.parseLong(userId);
-                productService.addCartItem(userIdLong, request);
+                cartService.addItem(userIdLong, request);
             } catch (NumberFormatException e) {
                 return ResponseEntity.badRequest().build();
             }
@@ -174,11 +184,11 @@ public class ProductController {
             @Valid @RequestBody QuantityUpdateRequest request,
             @RequestHeader(value = "X-Guest-Token", required = false) String guestToken) {
         if ("guest".equals(userId) && guestToken != null) {
-            productService.updateCartItemQuantityByGuestToken(guestToken, productId, request.getQuantity());
+            cartService.updateItemQuantityByGuestToken(guestToken, productId, request.getQuantity());
         } else {
             try {
                 Long userIdLong = Long.parseLong(userId);
-                productService.updateCartItemQuantity(userIdLong, productId, request.getQuantity());
+                cartService.updateItemQuantity(userIdLong, productId, request.getQuantity());
             } catch (NumberFormatException e) {
                 return ResponseEntity.badRequest().build();
             }
@@ -191,11 +201,11 @@ public class ProductController {
             @PathVariable Long productId,
             @RequestHeader(value = "X-Guest-Token", required = false) String guestToken) {
         if ("guest".equals(userId) && guestToken != null) {
-            productService.removeCartItemByGuestToken(guestToken, productId);
+            cartService.removeItemByGuestToken(guestToken, productId);
         } else {
             try {
                 Long userIdLong = Long.parseLong(userId);
-                productService.removeCartItem(userIdLong, productId);
+                cartService.removeItem(userIdLong, productId);
             } catch (NumberFormatException e) {
                 return ResponseEntity.badRequest().build();
             }
@@ -205,7 +215,7 @@ public class ProductController {
 
     @DeleteMapping("/cart/{userId}")
     public ResponseEntity<Void> clearCart(@PathVariable Long userId) {
-        productService.clearCart(userId);
+        cartService.clearCart(userId);
         return ResponseEntity.noContent().build();
     }
 
@@ -223,13 +233,13 @@ public class ProductController {
             return ResponseEntity.badRequest().build();
         }
 
-        productService.mergeGuestCartToUser(guestToken, userId);
+        cartService.mergeGuestCartToUser(guestToken, userId);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/cart/{userId}/checkout")
     public ResponseEntity<CheckoutResponse> checkoutCart(@PathVariable Long userId) {
-        return ResponseEntity.ok(productService.checkoutCart(userId));
+        return ResponseEntity.ok(inventoryService.checkoutCart(userId));
     }
 
     @GetMapping("/categories")

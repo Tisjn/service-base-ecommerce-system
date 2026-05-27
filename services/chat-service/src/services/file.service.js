@@ -39,4 +39,17 @@ const upload = multer({
   limits: { fileSize: env.upload.maxFileSize },
 });
 
-module.exports = { upload };
+function toUploadResponse(file) {
+  const isImage = file.mimetype.startsWith("image/");
+  const relativePath = path.relative(env.upload.path, file.path).replace(/\\/g, "/");
+
+  return {
+    fileName: file.filename,
+    fileUrl: `/uploads/${relativePath}`,
+    type: isImage ? "image" : "file",
+    mimeType: file.mimetype,
+    size: file.size,
+  };
+}
+
+module.exports = { toUploadResponse, upload };

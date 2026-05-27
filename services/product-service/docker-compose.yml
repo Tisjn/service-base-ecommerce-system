@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # =========================
   # Redis Cache
@@ -18,6 +16,23 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
+      retries: 5
+
+  # =========================
+  # RabbitMQ Message Queue
+  # =========================
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: product-rabbitmq
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "status"]
+      interval: 10s
+      timeout: 5s
       retries: 5
 
   # =========================
@@ -44,10 +59,17 @@ services:
       - SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=2
       - SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=0
       # Redis
+      - SPRING_DATA_REDIS_HOST=redis-cache
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_TIMEOUT=1000ms
       - SPRING_REDIS_HOST=redis-cache
       - SPRING_REDIS_PORT=6379
       - REDIS_HOST=redis-cache
       - REDIS_PORT=6379
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
       - ORDER_SERVICE_URL=http://host.docker.internal:3004
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
@@ -57,6 +79,8 @@ services:
       - JWT_SECRET=${JWT_SECRET:-0a8e7a473e35d1080204701f57ba0cb86641689c11998b16662f96be329c2ac3}
     depends_on:
       redis-cache:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     networks:
       - app-network

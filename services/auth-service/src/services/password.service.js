@@ -1,10 +1,7 @@
-const env = require("../config/env");
 const userRepository = require("../repositories/user.repository");
-const otpRepository = require("../repositories/otp.repository");
-const tokenRepository = require("../repositories/token.repository");
-const { generateOTP } = require("../utils/otp.utils");
-const { comparePassword, hashPassword } = require("../utils/hash.utils");
-const { sendOtpEmail } = require("../utils/mailer.utils");
+const otpService = require("./otp.service");
+const passwordEncoder = require("./passwordEncoder.service");
+const refreshTokenService = require("./refreshToken.service");
 const AppError = require("../utils/httpError");
 
 function normalizeEmail(email) {
@@ -16,74 +13,38 @@ async function sendResetOtp(email) {
   const user = await userRepository.findByEmail(normalizedEmail);
 
   if (!user) {
-    throw new AppError(404, "Email không tồn tại");
+    throw new AppError(404, "Email khong ton tai");
   }
 
-  const otp = generateOTP();
-
-  await otpRepository.setResetOtp(
-    normalizedEmail,
-    {
-      otp,
-      attempts: 0,
-    },
-    env.otp.ttlSeconds,
-  );
-
-  await sendOtpEmail(normalizedEmail, otp, "reset");
+  await otpService.createResetOtp(normalizedEmail);
 
   return {
-    message: "OTP đã được gửi",
+    message: "OTP da duoc gui",
   };
 }
 
 async function verifyResetOtp({ email, otp, newPassword }) {
   const normalizedEmail = normalizeEmail(email);
-  const otpData = await otpRepository.getResetOtp(normalizedEmail);
+  await otpService.verifyResetOtp(normalizedEmail, otp);
 
-  if (!otpData) {
-    throw new AppError(400, "OTP đã hết hạn hoặc không tồn tại");
-  }
-
-  if (String(otpData.otp) !== String(otp)) {
-    const nextAttempts = (otpData.attempts || 0) + 1;
-
-    if (nextAttempts >= env.otp.maxAttempts) {
-      await otpRepository.deleteResetOtp(normalizedEmail);
-      throw new AppError(429, "OTP sai quá 3 lần. Vui lòng gửi lại OTP");
-    }
-
-    await otpRepository.updateResetOtp(
-      normalizedEmail,
-      {
-        ...otpData,
-        attempts: nextAttempts,
-      },
-      env.otp.ttlSeconds,
-    );
-
-    throw new AppError(400, "OTP không đúng");
-  }
-
-  const hashedPassword = await hashPassword(newPassword);
   const updated = await userRepository.updatePassword(
     normalizedEmail,
-    hashedPassword,
+    await passwordEncoder.hash(newPassword),
   );
 
   if (!updated) {
-    throw new AppError(500, "Không thể cập nhật mật khẩu");
+    throw new AppError(500, "Khong the cap nhat mat khau");
   }
 
   const updatedUser = await userRepository.findByEmail(normalizedEmail);
   if (updatedUser) {
-    await tokenRepository.deleteRefreshToken(updatedUser.id);
+    await refreshTokenService.revokeByUserId(updatedUser.id);
   }
 
-  await otpRepository.deleteResetOtp(normalizedEmail);
+  await otpService.deleteResetOtp(normalizedEmail);
 
   return {
-    message: "Đổi mật khẩu thành công, vui lòng đăng nhập lại",
+    message: "Doi mat khau thanh cong, vui long dang nhap lai",
   };
 }
 
@@ -93,50 +54,32 @@ async function changePassword({ userId, currentPassword, otp, newPassword }) {
     throw new AppError(404, "Nguoi dung khong ton tai");
   }
 
-  const validPassword = await comparePassword(currentPassword, user.password);
+  const validPassword = await passwordEncoder.matches(
+    currentPassword,
+    user.password,
+  );
   if (!validPassword) {
     throw new AppError(400, "Mat khau hien tai khong dung");
   }
 
-  const samePassword = await comparePassword(newPassword, user.password);
+  const samePassword = await passwordEncoder.matches(newPassword, user.password);
   if (samePassword) {
     throw new AppError(400, "Mat khau moi phai khac mat khau hien tai");
   }
 
-  const otpData = await otpRepository.getResetOtp(normalizeEmail(user.email));
-  if (!otpData) {
-    throw new AppError(400, "OTP đã hết hạn hoặc không tồn tại");
-  }
+  const normalizedEmail = normalizeEmail(user.email);
+  await otpService.verifyResetOtp(normalizedEmail, otp);
 
-  if (String(otpData.otp) !== String(otp)) {
-    const nextAttempts = (otpData.attempts || 0) + 1;
-    if (nextAttempts >= env.otp.maxAttempts) {
-      await otpRepository.deleteResetOtp(normalizeEmail(user.email));
-      throw new AppError(429, "OTP sai quá 3 lần. Vui lòng gửi lại OTP");
-    }
-
-    await otpRepository.updateResetOtp(
-      normalizeEmail(user.email),
-      {
-        ...otpData,
-        attempts: nextAttempts,
-      },
-      env.otp.ttlSeconds,
-    );
-    throw new AppError(400, "OTP không đúng");
-  }
-
-  const hashedPassword = await hashPassword(newPassword);
   const updated = await userRepository.updatePasswordById(
     userId,
-    hashedPassword,
+    await passwordEncoder.hash(newPassword),
   );
   if (!updated) {
     throw new AppError(500, "Khong the cap nhat mat khau");
   }
 
-  await tokenRepository.deleteRefreshToken(userId);
-  await otpRepository.deleteResetOtp(normalizeEmail(user.email));
+  await refreshTokenService.revokeByUserId(userId);
+  await otpService.deleteResetOtp(normalizedEmail);
 
   return {
     message: "Doi mat khau thanh cong. Vui long dang nhap lai.",

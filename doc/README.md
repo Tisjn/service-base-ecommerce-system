@@ -169,7 +169,7 @@ See [DEPLOYMENT_TESTING_GUIDE.md](DEPLOYMENT_TESTING_GUIDE.md#local-development-
 Guest Add to Cart:
   → Session + guest:<sessionId>
   → Cart saved to Redis (24h TTL)
-  → Data synced to Product Service
+  → Cart changes are synchronized to product-service and order-service via HTTP
 
 Login & Merge:
   → JWT generated + stored

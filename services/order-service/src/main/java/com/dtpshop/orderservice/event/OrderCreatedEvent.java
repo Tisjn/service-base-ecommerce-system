@@ -14,9 +14,13 @@ import lombok.NoArgsConstructor;
 public class OrderCreatedEvent {
     private Long orderId;
     private Long userId;
+    private Long addressId;
     private String shippingAddress;
     private List<CartItemDto> cartItems;
     private BigDecimal totalAmount;
+    private String paymentMethod;
+    private String cartKey;
+    private String customerEmail;
     private String correlationId;
     private LocalDateTime createdAt;
 }

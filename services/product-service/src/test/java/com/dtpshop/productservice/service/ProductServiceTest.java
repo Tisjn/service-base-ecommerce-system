@@ -66,6 +66,7 @@ class ProductServiceTest {
         request.setName("Test Product");
         request.setDescription("A product for testing");
         request.setPrice(new BigDecimal("19.99"));
+        request.setPurchasePrice(new BigDecimal("12.50"));
         request.setStockQuantity(10);
         request.setImageUrl("https://example.com/image.png");
         request.setCategoryId(1);
@@ -75,6 +76,7 @@ class ProductServiceTest {
         assertThat(created.getName()).isEqualTo("Test Product");
         assertThat(created.getDescription()).isEqualTo("A product for testing");
         assertThat(created.getPrice()).isEqualByComparingTo(new BigDecimal("19.99"));
+        assertThat(created.getPurchasePrice()).isEqualByComparingTo(new BigDecimal("12.50"));
         assertThat(created.getStockQuantity()).isEqualTo(10);
         assertThat(created.getReservedQuantity()).isZero();
         assertThat(created.getImageUrl()).isEqualTo("https://example.com/image.png");
@@ -94,6 +96,7 @@ class ProductServiceTest {
         existing.setName("Old Name");
         existing.setDescription("Old desc");
         existing.setPrice(new BigDecimal("20.00"));
+        existing.setPurchasePrice(new BigDecimal("11.00"));
         existing.setStockQuantity(5);
         existing.setReservedQuantity(1);
         existing.setStatus(ProductStatus.ACTIVE);
@@ -105,6 +108,7 @@ class ProductServiceTest {
         ProductUpdateRequest request = new ProductUpdateRequest();
         request.setName("Updated Name");
         request.setPrice(new BigDecimal("25.00"));
+        request.setPurchasePrice(new BigDecimal("15.00"));
         request.setImageUrl("https://new.example.com/new.png");
         request.setStatus("hidden");
 
@@ -112,6 +116,7 @@ class ProductServiceTest {
 
         assertThat(updated.getName()).isEqualTo("Updated Name");
         assertThat(updated.getPrice()).isEqualByComparingTo(new BigDecimal("25.00"));
+        assertThat(updated.getPurchasePrice()).isEqualByComparingTo(new BigDecimal("15.00"));
         assertThat(updated.getImageUrl()).isEqualTo("https://new.example.com/new.png");
         assertThat(updated.getStatus()).isEqualTo(ProductStatus.HIDDEN);
         assertThat(updated.getUpdatedAt()).isNotNull();
@@ -270,6 +275,7 @@ class ProductServiceTest {
         request.setName("Test Product");
         request.setDescription("A product for testing");
         request.setPrice(new BigDecimal("19.99"));
+        request.setPurchasePrice(new BigDecimal("12.50"));
         request.setStockQuantity(10);
         request.setCategoryId(999);
 

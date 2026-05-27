@@ -141,10 +141,11 @@ export default function OrderCatalogSection({
       setRatingStatsByProductId(nextStats);
     }
 
-    loadRatingStats();
+    const timer = window.setTimeout(loadRatingStats, 300);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [productIds]);
 

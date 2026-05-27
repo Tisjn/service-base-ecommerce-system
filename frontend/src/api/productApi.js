@@ -3,6 +3,10 @@ const API_GATEWAY_URL =
   import.meta.env.VITE_API_URL ||
   "http://localhost:8081";
 const API_BASE_URL = `${API_GATEWAY_URL.replace(/\/$/, "")}/api`;
+const PRODUCT_CACHE_TTL_MS = 60_000;
+const CATEGORY_CACHE_TTL_MS = 5 * 60_000;
+const responseCache = new Map();
+const inFlightRequests = new Map();
 
 function getAuthHeaders() {
   const token = localStorage.getItem("authToken");
@@ -52,6 +56,58 @@ async function handleResponse(response) {
   return data;
 }
 
+function getCacheScope() {
+  return localStorage.getItem("authToken") || "guest";
+}
+
+function getCachedValue(key) {
+  const cached = responseCache.get(key);
+  if (!cached || cached.expiresAt <= Date.now()) {
+    responseCache.delete(key);
+    return null;
+  }
+  return cached.data;
+}
+
+async function cachedGet(path, { ttl = PRODUCT_CACHE_TTL_MS, force = false } = {}) {
+  const key = `${getCacheScope()}:${path}`;
+  if (!force) {
+    const cached = getCachedValue(key);
+    if (cached) {
+      return cached;
+    }
+    if (inFlightRequests.has(key)) {
+      return inFlightRequests.get(key);
+    }
+  }
+
+  const request = requestWithFallback(path, {
+    headers: getAuthHeaders(),
+  })
+    .then(handleResponse)
+    .then((data) => {
+      responseCache.set(key, {
+        data,
+        expiresAt: Date.now() + ttl,
+      });
+      return data;
+    })
+    .finally(() => {
+      inFlightRequests.delete(key);
+    });
+
+  inFlightRequests.set(key, request);
+  return request;
+}
+
+function invalidateProductCache() {
+  for (const key of responseCache.keys()) {
+    if (key.includes(":/products") || key.includes(":/categories")) {
+      responseCache.delete(key);
+    }
+  }
+}
+
 export async function getProducts({
   page = 0,
   size = 20,
@@ -74,27 +130,15 @@ export async function getProducts({
   params.set("sortBy", sortBy);
   params.set("direction", direction);
 
-  const response = await requestWithFallback(`/products?${params.toString()}`, {
-    headers: getAuthHeaders(),
-    cache: "no-store",
-  });
-  return handleResponse(response);
+  return cachedGet(`/products?${params.toString()}`);
 }
 
 export async function getCategories() {
-  const response = await requestWithFallback("/categories", {
-    headers: getAuthHeaders(),
-    cache: "no-store",
-  });
-  return handleResponse(response);
+  return cachedGet("/categories", { ttl: CATEGORY_CACHE_TTL_MS });
 }
 
 export async function getProduct(productId) {
-  const response = await requestWithFallback(`/products/${productId}`, {
-    headers: getAuthHeaders(),
-    cache: "no-store",
-  });
-  return handleResponse(response);
+  return cachedGet(`/products/${productId}`);
 }
 
 export async function createCategory(categoryData) {
@@ -107,7 +151,9 @@ export async function createCategory(categoryData) {
     body: JSON.stringify(categoryData),
     cache: "no-store",
   });
-  return handleResponse(response);
+  const data = await handleResponse(response);
+  invalidateProductCache();
+  return data;
 }
 
 export async function updateCategory(categoryId, categoryData) {
@@ -120,7 +166,9 @@ export async function updateCategory(categoryId, categoryData) {
     body: JSON.stringify(categoryData),
     cache: "no-store",
   });
-  return handleResponse(response);
+  const data = await handleResponse(response);
+  invalidateProductCache();
+  return data;
 }
 
 export async function deleteCategory(categoryId) {
@@ -129,7 +177,9 @@ export async function deleteCategory(categoryId) {
     headers: getAuthHeaders(),
     cache: "no-store",
   });
-  return handleResponse(response);
+  const data = await handleResponse(response);
+  invalidateProductCache();
+  return data;
 }
 
 export async function createProduct(productData) {
@@ -141,7 +191,9 @@ export async function createProduct(productData) {
     },
     body: JSON.stringify(productData),
   });
-  return handleResponse(response);
+  const data = await handleResponse(response);
+  invalidateProductCache();
+  return data;
 }
 
 export async function updateProduct(productId, productData) {
@@ -153,7 +205,9 @@ export async function updateProduct(productId, productData) {
     },
     body: JSON.stringify(productData),
   });
-  return handleResponse(response);
+  const data = await handleResponse(response);
+  invalidateProductCache();
+  return data;
 }
 
 export async function deleteProduct(productId) {
@@ -161,7 +215,9 @@ export async function deleteProduct(productId) {
     method: "DELETE",
     headers: getAuthHeaders(),
   });
-  return handleResponse(response);
+  const data = await handleResponse(response);
+  invalidateProductCache();
+  return data;
 }
 
 export async function restoreProduct(productId) {
@@ -169,7 +225,9 @@ export async function restoreProduct(productId) {
     method: "PATCH",
     headers: getAuthHeaders(),
   });
-  return handleResponse(response);
+  const data = await handleResponse(response);
+  invalidateProductCache();
+  return data;
 }
 
 export async function permanentlyDeleteProduct(productId) {
@@ -177,7 +235,9 @@ export async function permanentlyDeleteProduct(productId) {
     method: "DELETE",
     headers: getAuthHeaders(),
   });
-  return handleResponse(response);
+  const data = await handleResponse(response);
+  invalidateProductCache();
+  return data;
 }
 
 export async function getProductDetailWithComments(productId) {

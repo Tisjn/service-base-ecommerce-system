@@ -29,6 +29,7 @@ async function requestWithFallback(path, options = {}) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
       const response = await fetch(`${API_BASE_URL}${path}`, {
+        // Gửi kèm JSESSIONID để order-service nhận diện giỏ hàng của guest.
         credentials: "include",
         ...options,
       });
@@ -108,6 +109,7 @@ export async function clearCart() {
 }
 
 export async function notifyCartOnLogin(userId) {
+  // Sau khi đăng nhập, yêu cầu order-service gộp giỏ guest hiện tại vào giỏ user.
   const response = await requestWithFallback("/cart/session/login", {
     method: "POST",
     headers: {

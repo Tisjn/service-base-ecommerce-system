@@ -33,13 +33,13 @@
 ## Kiến trúc luồng xử lý
 
 ```
-POST /cart/items or POST /orders (via Gateway)
+POST /api/cart/items or POST /api/orders (via Gateway)
     ↓
 OrderController.resolveCartKey(HttpSession)
   ↓
 guest:<sessionId> or <userId>
   ↓
-CartRepository.saveCart(...) → Redis (TTL 24h)
+CartService.save/merge/update/remove/clear(...) → Redis (TTL 24h)
   ↓
 OrderService.createOrder(...)
   ├─→ save PENDING order in MySQL
@@ -109,20 +109,24 @@ docker run --rm -p 3004:3004 order-service
 
 > Base path: `/api`
 
-| Endpoint                       | Method | Response | Mô tả                                           |
-| ------------------------------ | ------ | -------- | ----------------------------------------------- |
-| `/api/cart`                    | GET    | 200      | Xem giỏ hàng hiện tại                           |
-| `/api/cart/items`              | POST   | 201      | Thêm vào giỏ hàng                               |
-| `/api/cart/items/{productId}`  | PATCH  | 204      | Cập nhật số lượng / xóa khi quantity = 0        |
-| `/api/cart/items/{productId}`  | DELETE | 204      | Xóa sản phẩm khỏi giỏ                           |
-| `/api/cart/session/login`      | POST   | 200      | Đồng bộ guest cart sang user cart khi đăng nhập |
-| `/api/cart/session/logout`     | POST   | 204      | Hủy liên kết user khỏi session hiện tại         |
-| `/api/orders`                  | POST   | **202**  | Tạo đơn (hybrid sync + async orchestration)     |
-| `/api/orders`                  | GET    | 200      | Danh sách tất cả đơn hàng                       |
-| `/api/orders/user/{userId}`    | GET    | 200      | Danh sách đơn của một user                      |
-| `/api/orders/{orderId}`        | GET    | 200      | Chi tiết đơn                                    |
-| `/api/orders/{orderId}/status` | PATCH  | 200      | Cập nhật status (Admin)                         |
-| `/api/orders/{orderId}/cancel` | DELETE | 202      | Hủy đơn (sync update + refund + event publish)  |
+| Endpoint                                                   | Method | Response | Mô tả                                           |
+| ---------------------------------------------------------- | ------ | -------- | ----------------------------------------------- |
+| `/api/cart`                                                | GET    | 200      | Xem giỏ hàng hiện tại                           |
+| `/api/cart/items`                                          | POST   | 201      | Thêm vào giỏ hàng                               |
+| `/api/cart/items/{productId}`                              | PATCH  | 204      | Cập nhật số lượng / xóa khi quantity = 0        |
+| `/api/cart/items/{productId}`                              | DELETE | 204      | Xóa sản phẩm khỏi giỏ                           |
+| `/api/cart/session/login`                                  | POST   | 200      | Đồng bộ guest cart sang user cart khi đăng nhập |
+| `/api/cart/session/logout`                                 | POST   | 204      | Hủy liên kết user khỏi session hiện tại         |
+| `/api/orders`                                              | POST   | **202**  | Tạo đơn (hybrid sync + async orchestration)     |
+| `/api/orders/{userId}`                                     | POST   | **202**  | Tạo đơn cho user cụ thể                         |
+| `/api/orders`                                              | GET    | 200      | Danh sách tất cả đơn hàng                       |
+| `/api/orders/user/{userId}`                                | GET    | 200      | Danh sách đơn của một user                      |
+| `/api/orders/{orderId}`                                    | GET    | 200      | Chi tiết đơn                                    |
+| `/api/orders/{orderId}/comments`                           | GET    | 200      | Danh sách comment của đơn                       |
+| `/api/orders/products/{productId}/details`                 | GET    | 200      | Chi tiết sản phẩm theo ngữ cảnh đơn             |
+| `/api/orders/users/{userId}/products/{productId}/comments` | POST   | 201      | Thêm comment sản phẩm                           |
+| `/api/orders/{orderId}/status`                             | PATCH  | 200      | Cập nhật status (Admin)                         |
+| `/api/orders/{orderId}/cancel`                             | DELETE | 202      | Hủy đơn (sync update + refund + event publish)  |
 
 **Lưu ý**: `POST /api/orders` và `DELETE /api/orders/{orderId}/cancel` trả về `202 Accepted` vì nghiệp vụ chưa hoàn tất toàn bộ tại thời điểm trả response.
 
@@ -155,11 +159,13 @@ docker run --rm -p 3004:3004 order-service
 - `CartRepository` lưu dữ liệu cart trong Redis với TTL 24 giờ
 - Khi login hoặc checkout, guest cart được merge sang user cart nếu cần
 - `OrderService.createOrder(...)` lưu đơn `PENDING` vào MySQL, gọi payment/product client, publish event, notify websocket, clear cart và gửi email
+- `OrderController` hỗ trợ cả `/api/orders` và `/api/orders/{userId}` để tạo đơn
 
 ### Saga / Event Flow
 
 - `EventPublisherService` publish `OrderCreated`, `OrderCancelled`, `PaymentProcessed`, `PaymentFailed`, `InventoryReserved`
 - `cancelOrder(...)` cập nhật trạng thái order, refund inventory và publish `OrderCancelled`
+- `InventoryHandler` và `OrderSagaOrchestrator` phối hợp với `product-service` để reserve/refund tồn kho
 - Các bước sync hiện tại nằm trong service layer, còn RabbitMQ dùng để mở rộng xử lý bất đồng bộ
 
 ### Redis & Cart

@@ -1,32 +1,30 @@
 package com.dtpshop.orderservice.service;
 
-import com.dtpshop.orderservice.event.PaymentProcessedEvent;
+import com.dtpshop.orderservice.command.SendNotificationCommand;
+import com.dtpshop.orderservice.config.RabbitMqConfig;
+import com.dtpshop.orderservice.model.Order;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 @Service
-@ConditionalOnProperty(name = "order.saga.payment-enabled", havingValue = "true")
 public class NotificationHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(NotificationHandler.class);
     private final OrderService orderService;
-    private final CartService cartService;
+    private final OrderEmailService orderEmailService;
 
-    public NotificationHandler(OrderService orderService, CartService cartService) {
+    public NotificationHandler(OrderService orderService, OrderEmailService orderEmailService) {
         this.orderService = orderService;
-        this.cartService = cartService;
+        this.orderEmailService = orderEmailService;
     }
 
-    @RabbitListener(queues = "notification.send")
-    public void handlePaymentProcessed(PaymentProcessedEvent event) {
-        logger.info("NotificationHandler received PaymentProcessed for orderId={}", event.getOrderId());
-        orderService.confirmOrder(event.getOrderId(), event.getPaymentId());
-        cartService.clearCart(String.valueOf(event.getUserId()));
-        logger.info("Order confirmed and cart cleared for orderId={}, userId={}", event.getOrderId(),
-                event.getUserId());
-        logger.info("Simulated notification sent to userId={} for orderId={}", event.getUserId(), event.getOrderId());
+    @RabbitListener(queues = RabbitMqConfig.NOTIFICATION_QUEUE)
+    public void handleSendNotification(SendNotificationCommand command) {
+        logger.info("NotificationHandler received SendNotification command for orderId={}", command.getOrderId());
+        Order order = orderService.getOrder(command.getOrderId());
+        orderEmailService.sendOrderPlacedEmail(command.getCustomerEmail(), order);
+        logger.info("Order notification sent for orderId={}, userId={}", command.getOrderId(), command.getUserId());
     }
 }

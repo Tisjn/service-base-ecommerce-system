@@ -42,6 +42,7 @@ const initialFormState = {
   name: "",
   description: "",
   price: "",
+  purchasePrice: "",
   stockQuantity: "",
   categoryId: "",
   status: "ACTIVE",
@@ -552,6 +553,7 @@ export default function ProductAdminPage({
       name: product.name || "",
       description: product.description || "",
       price: product.price?.toString() || "",
+      purchasePrice: product.purchasePrice?.toString() || "",
       stockQuantity: product.stockQuantity?.toString() || "",
       categoryId: product.category?.id?.toString() || "",
       status: product.status || "ACTIVE",
@@ -603,8 +605,13 @@ export default function ProductAdminPage({
   async function handleSubmitProduct(event) {
     event.preventDefault();
 
-    if (!form.name.trim() || !form.price || !form.stockQuantity) {
-      showNotification("error", "Vui lòng nhập tên, giá và tồn kho.");
+    if (
+      !form.name.trim() ||
+      !form.price ||
+      !form.purchasePrice ||
+      !form.stockQuantity
+    ) {
+      showNotification("error", "Vui lòng nhập tên, giá bán, giá nhập và tồn kho.");
       return;
     }
 
@@ -612,6 +619,7 @@ export default function ProductAdminPage({
       name: form.name.trim(),
       description: form.description.trim(),
       price: Number(form.price),
+      purchasePrice: Number(form.purchasePrice),
       stockQuantity: Number(form.stockQuantity),
       categoryId: form.categoryId ? Number(form.categoryId) : undefined,
       status: form.status,
@@ -1032,7 +1040,8 @@ export default function ProductAdminPage({
                     <tr className="bg-[#e7e7f3]">
                       <TableHead>Tên sản phẩm</TableHead>
                       <TableHead>Danh mục</TableHead>
-                      <TableHead>Giá</TableHead>
+                      <TableHead>Giá bán</TableHead>
+                      <TableHead>Giá nhập</TableHead>
                       <TableHead>Tồn kho</TableHead>
                       <TableHead align="right">Thao tác</TableHead>
                     </tr>
@@ -1707,6 +1716,9 @@ function ProductRow({ product, onView, onEdit, onDelete, onRestore }) {
       <td className="px-6 py-5 font-semibold text-[#191b23] [font-family:Manrope,system-ui,sans-serif]">
         {currencyFormatter.format(product.price || 0)}
       </td>
+      <td className="px-6 py-5 font-semibold text-[#191b23] [font-family:Manrope,system-ui,sans-serif]">
+        {currencyFormatter.format(product.purchasePrice || 0)}
+      </td>
       <td className="px-6 py-5">
         <div className="flex flex-col gap-1">
           <span
@@ -1842,7 +1854,7 @@ function AdminOrderRow({ order, onOpen }) {
         </span>
       </td>
       <td className="px-6 py-5 text-sm text-[#434655]">
-        {order.createdAt ? new Date(order.createdAt).toLocaleString() : "-"}
+        {formatDateTime(order.createdAt)}
       </td>
       <td className="px-6 py-5 font-semibold text-right text-[#191b23]">
         {currencyFormatter.format(totalAmount)}
@@ -1925,9 +1937,7 @@ function AdminOrderDetailModal({
                 <InfoCard
                   label="Ngày tạo"
                   value={
-                    order.createdAt
-                      ? new Date(order.createdAt).toLocaleString()
-                      : "-"
+                    formatDateTime(order.createdAt)
                   }
                 />
                 <InfoCard
@@ -2207,14 +2217,28 @@ function ProductModal({
               </select>
             </AdminField>
           </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <AdminField label="Giá">
+          <div className="grid gap-4 sm:grid-cols-4">
+            <AdminField label="Giá bán">
               <input
                 type="number"
                 min="0"
                 value={form.price}
                 onChange={(event) =>
                   setForm((prev) => ({ ...prev, price: event.target.value }))
+                }
+                className="azure-input"
+              />
+            </AdminField>
+            <AdminField label="Giá nhập">
+              <input
+                type="number"
+                min="0"
+                value={form.purchasePrice}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    purchasePrice: event.target.value,
+                  }))
                 }
                 className="azure-input"
               />
@@ -2437,6 +2461,9 @@ function ProductDetailAdminModal({
                 </p>
                 <p className="mt-3 text-3xl font-bold text-[#004ac6]">
                   {currencyFormatter.format(productData.price || 0)}
+                </p>
+                <p className="mt-2 text-sm font-semibold text-slate-600">
+                  Giá nhập: {currencyFormatter.format(productData.purchasePrice || 0)}
                 </p>
               </div>
               <div className="space-y-1 text-right">

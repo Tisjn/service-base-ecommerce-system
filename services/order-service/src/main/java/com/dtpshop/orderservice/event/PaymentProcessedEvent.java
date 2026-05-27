@@ -18,5 +18,10 @@ public class PaymentProcessedEvent {
     private String correlationId;
     private List<CartItemDto> cartItems;
     private BigDecimal totalAmount;
+    private String paymentStatus;
+    private String paymentUrl;
+    private String paymentMethod;
+    private String cartKey;
+    private String customerEmail;
     private LocalDateTime processedAt;
 }

@@ -1,8 +1,9 @@
 const chatService = require("../services/chat.service");
+const realtimeService = require("../services/realtime.service");
 const { isAdmin } = require("../utils/jwt.utils");
 const logger = require("../utils/logger");
 
-function registerChatSocket(io, socket) {
+function registerChatSocket(socket) {
   if (isAdmin(socket.user)) {
     socket.join("admins");
   }
@@ -65,8 +66,7 @@ function registerChatSocket(io, socket) {
         roomId: payload.roomId,
         messageId: savedMessage.id,
       });
-      io.to(`room:${payload.roomId}`).emit("message", savedMessage);
-      io.to("admins").emit("new_message", savedMessage);
+      realtimeService.notifyMessage(payload.roomId, savedMessage);
 
       ack?.({ ok: true, message: savedMessage });
     } catch (error) {

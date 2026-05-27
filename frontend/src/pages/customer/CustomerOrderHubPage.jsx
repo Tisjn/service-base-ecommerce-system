@@ -47,6 +47,40 @@ const emptyCheckout = {
 const CUSTOMER_CATALOG_PAGE_SIZE = 9;
 const CUSTOMER_ORDER_PAGE_SIZE = 9;
 
+function delay(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function waitForPaymentUrl(orderId, attempts = 12) {
+  if (!orderId) {
+    return null;
+  }
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    await delay(500);
+    const order = await orderApi.getOrder(orderId);
+    if (order?.paymentUrl) {
+      return order.paymentUrl;
+    }
+    if (order?.paymentStatus === "FAILED" || order?.status === "CANCELLED") {
+      throw new Error("Khong tao duoc link thanh toan MoMo.");
+    }
+  }
+
+  return null;
+}
+
+function useDebouncedValue(value, delay = 300) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedValue(value), delay);
+    return () => window.clearTimeout(timer);
+  }, [delay, value]);
+
+  return debouncedValue;
+}
+
 function resolveAccountCandidate(user) {
   if (!user) {
     return null;
@@ -90,6 +124,8 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [maxPrice, setMaxPrice] = useState(50000);
+  const debouncedSearch = useDebouncedValue(search.trim(), 350);
+  const debouncedMaxPrice = useDebouncedValue(maxPrice, 350);
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortDirection, setSortDirection] = useState("desc");
   const [catalogPage, setCatalogPage] = useState(0);
@@ -123,10 +159,11 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
 
   const isAdmin = resolveRole(account).includes("ADMIN");
   const userId = Number(account?.id || account?.userId || 0) || null;
-  const customerOrderTopics = useMemo(
-    () => (userId && !isAdmin ? [`/topic/users/${userId}/orders`] : []),
-    [isAdmin, userId],
-  );
+  const orderTopics = useMemo(() => {
+    if (isAdmin) return ["/topic/new_order"];
+    if (userId) return [`/topic/users/${userId}/orders`];
+    return [];
+  }, [isAdmin, userId]);
 
   useEffect(() => {
     setAccount(resolveAccountCandidate(user));
@@ -199,9 +236,9 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
       const response = await getProducts({
         page: catalogPage,
         size: catalogMeta.size,
-        search,
+        search: debouncedSearch,
         categoryId: categoryId || undefined,
-        maxPrice: maxPrice || undefined,
+        maxPrice: debouncedMaxPrice || undefined,
         status: "ACTIVE",
         sortBy,
         direction: sortDirection,
@@ -223,8 +260,8 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
     catalogMeta.size,
     catalogPage,
     categoryId,
-    maxPrice,
-    search,
+    debouncedMaxPrice,
+    debouncedSearch,
     showNotification,
     sortBy,
     sortDirection,
@@ -282,6 +319,33 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
 
   const applyOrderStatusUpdate = useCallback(
     (statusUpdate) => {
+      // Handle ORDER_CREATED payloads (sent to user-specific topic)
+      if (String(statusUpdate?.type || "").toUpperCase() === "ORDER_CREATED") {
+        const ordId = statusUpdate?.orderId || statusUpdate?.id;
+        if (!ordId) return;
+        orderApi
+          .getOrder(ordId)
+          .then((freshOrder) => {
+            setOrders((currentOrders) => {
+              const exists = currentOrders.some(
+                (order) =>
+                  String(order.orderId || order.id) ===
+                  String(freshOrder.orderId || freshOrder.id),
+              );
+              if (exists) return currentOrders;
+              return [freshOrder, ...currentOrders];
+            });
+            setOrderMeta((m) => ({
+              ...(m || {}),
+              totalElements: Number(m?.totalElements || 0) + 1,
+            }));
+          })
+          .catch(() => {
+            // swallow - UI will reload on navigation or periodic fetch
+          });
+        return;
+      }
+
       const orderId = statusUpdate?.orderId || statusUpdate?.id;
       const nextStatus = statusUpdate?.status;
       if (!orderId || !nextStatus) {
@@ -350,9 +414,44 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
     [orderStatusFilter, showNotification],
   );
 
-  useOrderSocket(userId && !isAdmin ? applyOrderStatusUpdate : null, {
-    topics: customerOrderTopics,
-  });
+  useOrderSocket(
+    isAdmin ? applyAdminNewOrder : userId ? applyOrderStatusUpdate : null,
+    {
+      topics: orderTopics,
+    },
+  );
+
+  // Admins should also receive notifications for new orders
+  const applyAdminNewOrder = useCallback(
+    (payload) => {
+      const orderId = payload?.orderId || payload?.id;
+      if (!orderId) return;
+      orderApi
+        .getOrder(orderId)
+        .then((freshOrder) => {
+          setAdminOrders((current) => {
+            const exists = current.some(
+              (o) =>
+                String(o.orderId || o.id) ===
+                String(freshOrder.orderId || freshOrder.id),
+            );
+            if (exists) return current;
+            return [freshOrder, ...current];
+          });
+          showNotification("success", `Đơn mới #${orderId} được tạo.`);
+        })
+        .catch(() => {
+          setAdminOrders((current) => {
+            const exists = current.some(
+              (o) => String(o.orderId || o.id) === String(orderId),
+            );
+            if (exists) return current;
+            return [{ orderId, ...payload }, ...current];
+          });
+        });
+    },
+    [showNotification],
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -362,12 +461,43 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
       return;
     }
 
+    const normalizedPaymentStatus = paymentStatus.toUpperCase();
     setActiveTab("history");
     setOrderPage(0);
+    setOrders((currentOrders) =>
+      currentOrders.map((order) =>
+        String(order.orderId || order.id) === String(orderId)
+          ? { ...order, paymentStatus: normalizedPaymentStatus }
+          : order,
+      ),
+    );
     loadOrders(0);
+    orderApi
+      .getOrder(orderId)
+      .then((freshOrder) => {
+        setOrders((currentOrders) => {
+          const exists = currentOrders.some(
+            (order) =>
+              String(order.orderId || order.id) ===
+              String(freshOrder.orderId || freshOrder.id),
+          );
+          if (!exists) {
+            return currentOrders;
+          }
+          return currentOrders.map((order) =>
+            String(order.orderId || order.id) ===
+            String(freshOrder.orderId || freshOrder.id)
+              ? freshOrder
+              : order,
+          );
+        });
+      })
+      .catch(() => {
+        // The list reload above still refreshes the visible history.
+      });
     showNotification(
-      paymentStatus.toUpperCase() === "PAID" ? "success" : "error",
-      paymentStatus.toUpperCase() === "PAID"
+      normalizedPaymentStatus === "PAID" ? "success" : "error",
+      normalizedPaymentStatus === "PAID"
         ? `Thanh toán MoMo cho đơn #${orderId} thành công.`
         : `Thanh toán MoMo cho đơn #${orderId} chưa thành công.`,
     );
@@ -450,6 +580,7 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
 
     const syncSessionCartAndLoad = async () => {
       if (!userId) {
+        // Luồng guest: giỏ hàng gắn với cookie session backend, không lưu trong localStorage.
         notifiedLoginUserRef.current = null;
         await loadCart();
         setOrders([]);
@@ -457,6 +588,7 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
       }
       if (notifiedLoginUserRef.current !== userId) {
         try {
+          // Luồng đăng nhập: gộp cart:guest:<sessionId> vào cart:<userId> một lần.
           const mergedCart = await orderApi.notifyCartOnLogin(userId);
           notifiedLoginUserRef.current = userId;
           if (!cancelled && Array.isArray(mergedCart)) {
@@ -630,6 +762,36 @@ export default function CustomerOrderHubPage({ user, initialTab = "catalog" }) {
       if (order?.paymentUrl) {
         window.location.href = order.paymentUrl;
         return;
+      }
+
+      if (paymentMethod.toUpperCase() === "MOMO") {
+        const paymentUrl = await waitForPaymentUrl(order?.orderId);
+        if (paymentUrl) {
+          window.location.href = paymentUrl;
+          return;
+        }
+        throw new Error(
+          "Khong tao duoc link thanh toan MoMo. Vui long thu lai sau.",
+        );
+      }
+
+      // Immediately append order to UI so user sees it without waiting
+      try {
+        setOrders((prev) => {
+          const next = Array.isArray(prev) ? prev.slice() : [];
+          const exists = next.some(
+            (o) =>
+              String(o.orderId || o.id) === String(order.orderId || order.id),
+          );
+          if (!exists) next.unshift(order);
+          return next;
+        });
+        setOrderMeta((m) => ({
+          ...(m || {}),
+          totalElements: Number(m?.totalElements || 0) + 1,
+        }));
+      } catch (e) {
+        // ignore errors updating UI optimistically
       }
 
       showNotification(

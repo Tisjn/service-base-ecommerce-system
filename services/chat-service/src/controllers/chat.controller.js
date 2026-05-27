@@ -1,15 +1,10 @@
 const chatService = require("../services/chat.service");
-
-let socketServer = null;
-
-function setSocketServer(io) {
-  socketServer = io;
-}
+const realtimeService = require("../services/realtime.service");
 
 async function createRoom(req, res, next) {
   try {
     const room = await chatService.createRoom(req.user);
-    socketServer?.to("admins").emit("new_room", room);
+    realtimeService.notifyNewRoom(room);
     res.status(201).json(room);
   } catch (error) {
     next(error);
@@ -36,10 +31,7 @@ async function getRoom(req, res, next) {
 async function joinRoom(req, res, next) {
   try {
     const room = await chatService.joinAsAdmin(req.params.roomId, req.user);
-    socketServer?.to(`room:${room.roomId}`).emit("admin_joined", {
-      roomId: room.roomId,
-      adminId: room.adminId,
-    });
+    realtimeService.notifyAdminJoined(room);
     res.json(room);
   } catch (error) {
     next(error);
@@ -49,7 +41,7 @@ async function joinRoom(req, res, next) {
 async function closeRoom(req, res, next) {
   try {
     const room = await chatService.closeRoom(req.params.roomId, req.user);
-    socketServer?.to(`room:${room.roomId}`).emit("room_closed", room);
+    realtimeService.notifyRoomClosed(room);
     res.json(room);
   } catch (error) {
     next(error);
@@ -59,7 +51,7 @@ async function closeRoom(req, res, next) {
 async function reopenRoom(req, res, next) {
   try {
     const room = await chatService.reopenRoom(req.params.roomId, req.user);
-    socketServer?.to(`room:${room.roomId}`).emit("room_reopened", room);
+    realtimeService.notifyRoomReopened(room);
     res.json(room);
   } catch (error) {
     next(error);
@@ -84,5 +76,4 @@ module.exports = {
   listMessages,
   listRooms,
   reopenRoom,
-  setSocketServer,
 };

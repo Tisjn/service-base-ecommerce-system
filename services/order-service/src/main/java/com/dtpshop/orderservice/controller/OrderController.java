@@ -97,9 +97,11 @@ public class OrderController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing user id");
         }
 
+        // Gộp giỏ hàng guest của session hiện tại vào giỏ hàng của user đã đăng nhập.
         String guestCartKey = guestCartKey(session);
         String userCartKey = String.valueOf(userId);
         cartService.mergeCart(guestCartKey, userCartKey);
+        // Từ đây resolveCartKey(session) sẽ trỏ đến giỏ user thay vì giỏ guest.
         session.setAttribute(SESSION_USER_ID, userId);
         return ResponseEntity.ok(cartService.getCart(userCartKey));
     }
@@ -257,10 +259,12 @@ public class OrderController {
 
     private String resolveCartKey(HttpSession session) {
         Long userId = sessionUserId(session);
+        // Trước đăng nhập: guest:<sessionId>. Sau đăng nhập: <userId>.
         return userId != null ? String.valueOf(userId) : guestCartKey(session);
     }
 
     private String guestCartKey(HttpSession session) {
+        // Sang CartRepository sẽ thành Redis key cart:guest:<sessionId>.
         return "guest:" + session.getId();
     }
 

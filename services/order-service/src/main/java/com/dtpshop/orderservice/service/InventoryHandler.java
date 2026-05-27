@@ -1,8 +1,9 @@
 package com.dtpshop.orderservice.service;
 
 import com.dtpshop.orderservice.client.ProductServiceClient;
+import com.dtpshop.orderservice.command.ReserveInventoryCommand;
+import com.dtpshop.orderservice.config.RabbitMqConfig;
 import com.dtpshop.orderservice.event.InventoryReservedEvent;
-import com.dtpshop.orderservice.event.OrderCreatedEvent;
 import com.dtpshop.orderservice.event.PaymentFailedEvent;
 import java.time.LocalDateTime;
 import org.slf4j.Logger;
@@ -24,9 +25,9 @@ public class InventoryHandler {
         this.eventPublisherService = eventPublisherService;
     }
 
-    @RabbitListener(queues = "inventory.reserve")
-    public void handleOrderCreated(OrderCreatedEvent event) {
-        logger.info("InventoryHandler received OrderCreated for orderId={}", event.getOrderId());
+    @RabbitListener(queues = RabbitMqConfig.INVENTORY_RESERVE_QUEUE)
+    public void handleReserveInventory(ReserveInventoryCommand event) {
+        logger.info("InventoryHandler received ReserveInventory command for orderId={}", event.getOrderId());
         boolean reserved = productServiceClient.reserveInventory(event.getCartItems(), event.getCorrelationId());
         if (reserved) {
             InventoryReservedEvent reservedEvent = new InventoryReservedEvent(
@@ -35,6 +36,9 @@ public class InventoryHandler {
                     event.getCorrelationId(),
                     event.getCartItems(),
                     event.getTotalAmount(),
+                    event.getPaymentMethod(),
+                    event.getCartKey(),
+                    event.getCustomerEmail(),
                     LocalDateTime.now());
             eventPublisherService.publishInventoryReserved(reservedEvent);
         } else {
@@ -45,8 +49,11 @@ public class InventoryHandler {
                     event.getCorrelationId(),
                     event.getCartItems(),
                     event.getTotalAmount(),
+                    event.getCartKey(),
+                    false,
+                    event.getCustomerEmail(),
                     LocalDateTime.now());
-            eventPublisherService.publishPaymentFailed(failedEvent);
+            eventPublisherService.publishInventoryFailed(failedEvent);
         }
     }
 }

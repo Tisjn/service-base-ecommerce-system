@@ -72,6 +72,7 @@ public class CartRepository {
     }
 
     private String cartKey(String userId) {
+        // Ví dụ: cart:guest:<sessionId> trước đăng nhập, cart:<userId> sau đăng nhập.
         return "cart:" + userId;
     }
 }

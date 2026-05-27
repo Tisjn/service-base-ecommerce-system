@@ -114,14 +114,18 @@ DELETE /users/{id}             - [Admin] Soft delete user
 **Purpose:** Product catalog & inventory management  
 **Tech:** Spring Boot 3.x + Java 21 + JPA + Redis + MySQL (productdb)
 
+**C3 Space-based flow:** [PRODUCT_SERVICE_SPACE_BASED_C3.md](PRODUCT_SERVICE_SPACE_BASED_C3.md)
+
 #### Key Functions
 
 - **Product Listing:** Paginated, searchable, filterable
 - **Product Details:** Cache-aside pattern with Redis
-- **Cart Management:** Add/update/remove items from Redis
-- **Inventory Reserve:** Lock stock for orders
-- **Inventory Refund:** Return reserved stock on cancellation
+- **Image Upload:** Upload product images to S3-compatible storage
+- **Cart Management:** Guest/user cart via `/api/cart/*`, synchronized to `order-service`
+- **Inventory Reserve:** Reserve stock through `/api/inventory/reserve`
+- **Inventory Refund:** Return reserved stock through `/api/inventory/refund`
 - **Category Management:** CRUD operations for product categories
+- **Product Lifecycle:** Soft delete, restore, and permanent delete
 - **Stock Validation:** Check availability before checkout
 
 #### Routes
@@ -129,9 +133,12 @@ DELETE /users/{id}             - [Admin] Soft delete user
 ```
 GET    /api/products                      - List products (paginated, filterable)
 GET    /api/products/{id}                 - Get product details
+POST   /api/product-images                - Upload product image
 POST   /api/products                      - [Admin] Create product
 PATCH  /api/products/{id}                 - [Admin] Update product
 DELETE /api/products/{id}                 - [Admin] Delete product
+PATCH  /api/products/{id}/restore         - [Admin] Restore product
+DELETE /api/products/{id}/permanent       - [Admin] Permanently delete product
 PATCH  /api/products/{id}/stock           - [Admin] Update stock
 
 GET    /api/categories                    - List categories
@@ -139,11 +146,12 @@ POST   /api/categories                    - [Admin] Create category
 PATCH  /api/categories/{id}               - [Admin] Update category
 DELETE /api/categories/{id}               - [Admin] Delete category
 
-GET    /api/cart/{userId}                 - Get cart items
+GET    /api/cart/{userId}                 - Get cart items for guest/user
 POST   /api/cart/{userId}/items           - Add item to cart
 PATCH  /api/cart/{userId}/items/{productId} - Update quantity
 DELETE /api/cart/{userId}/items/{productId} - Remove item
 DELETE /api/cart/{userId}                 - Clear entire cart
+POST   /api/cart/merge                    - Merge guest cart to authenticated user cart
 POST   /api/cart/{userId}/checkout        - Checkout (reserve inventory)
 
 POST   /api/inventory/reserve             - [Order Svc] Reserve stock
@@ -179,13 +187,13 @@ POST   /api/inventory/refund              - [Order Svc] Refund stock
 #### Workflow
 
 ```
-POST /cart/items (or /api/cart/items)
+POST /api/cart/items or /api/orders
     ↓
 OrderController.resolveCartKey(HttpSession)
     ├─ Guest: "guest:<sessionId>"
     └─ User: "<userId>"
     ↓
-CartRepository.saveCart() → Redis
+CartService.add/update/remove/clear/merge() → Redis
     ↓
 [Optional] OrderService.createOrder()
     ├─→ Save PENDING order in MySQL
@@ -200,19 +208,24 @@ CartRepository.saveCart() → Redis
 #### Routes
 
 ```
-POST   /cart/items                        - Add item (guest/user)
-GET    /cart/{userId}                     - Get cart
-PATCH  /cart/{userId}/items/{productId}   - Update quantity
-DELETE /cart/{userId}/items/{productId}   - Remove item
-DELETE /cart/{userId}                     - Clear cart
-POST   /api/cart/{userId}/merge           - Merge guest→user cart
+POST   /api/cart/items                    - Add item (guest/user)
+GET    /api/cart                          - Get cart
+PATCH  /api/cart/items/{productId}        - Update quantity
+DELETE /api/cart/items/{productId}        - Remove item
+DELETE /api/cart                          - Clear cart
+POST   /api/cart/session/login            - Merge guest cart into user cart
+POST   /api/cart/session/logout           - Unlink current user from session
 
-POST   /orders                            - [Customer] Create order
-GET    /orders                            - [Customer] List own orders
-GET    /orders/{id}                       - Get order details
-PATCH  /orders/{id}/cancel                - Cancel order
-GET    /admin/orders                      - [Admin] List all orders
-PATCH  /admin/orders/{id}/status          - [Admin] Update status
+POST   /api/orders                        - [Customer] Create order
+POST   /api/orders/{userId}               - [Customer] Create order for user
+GET    /api/orders                        - [Customer] List orders (or paged when filters are provided)
+GET    /api/orders/user/{userId}          - [Customer] List orders by user
+GET    /api/orders/{orderId}              - Get order details
+GET    /api/orders/{orderId}/comments     - Get product comments for order
+GET    /api/orders/products/{productId}/details - Get product detail for an order context
+POST   /api/orders/users/{userId}/products/{productId}/comments - Add product comment
+PATCH  /api/orders/{orderId}/status       - [Admin] Update status
+DELETE /api/orders/{orderId}/cancel       - Cancel order
 
 [WebSocket] /ws/orders                    - Real-time order updates
 [RabbitMQ] order.created                  - Order creation event
@@ -355,13 +368,18 @@ GET    /api/ai/health                     - Health check
 - `order-service` → `payment-service` (create payment)
 - `gateway` → `auth-service` (verify JWT)
 
-#### 2. **Asynchronous (RabbitMQ Events)**
+### 2. **Cart Synchronization**
+
+- `product-service` syncs guest/user cart changes to `order-service` via HTTP client.
+- `order-service` stores the working cart in Redis and merges guest cart to user cart on login/checkout.
+
+### 3. **Asynchronous (RabbitMQ Events)**
 
 - `order-service` publishes `order.created` → email service, notifications
 - `order-service` publishes `order.cancelled` → refund process
 - `payment-service` webhook → update order status
 
-#### 3. **Data Caching (Redis)**
+### 4. **Data Caching (Redis)**
 
 - **Product Cache:** Cache-aside pattern, invalidated on update
 - **Cart Storage:** Guest carts stored with 24h TTL

@@ -18,5 +18,8 @@ public class PaymentFailedEvent {
     private String correlationId;
     private List<CartItemDto> cartItems;
     private BigDecimal totalAmount;
+    private String cartKey;
+    private boolean refundInventory;
+    private String customerEmail;
     private LocalDateTime failedAt;
 }

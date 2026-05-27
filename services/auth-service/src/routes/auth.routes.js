@@ -3,6 +3,7 @@ const { body } = require("express-validator");
 const multer = require("multer");
 
 const authController = require("../controllers/auth.controller");
+const authenticate = require("../middlewares/authenticate");
 const validateRequest = require("../middlewares/validateRequest");
 const {
   registerLimiter,
@@ -100,6 +101,7 @@ router.post(
 
 router.put(
   "/profile/password",
+  authenticate,
   [
     body("currentPassword")
       .notEmpty()
@@ -126,12 +128,13 @@ router.post(
   authController.refresh,
 );
 
-router.post("/logout", authController.logout);
+router.post("/logout", authenticate, authController.logout);
 
-router.get("/profile", authController.getProfile);
+router.get("/profile", authenticate, authController.getProfile);
 
 router.put(
   "/profile",
+  authenticate,
   [
     body("fullName")
       .trim()
@@ -144,17 +147,19 @@ router.put(
 
 router.put(
   "/profile/avatar",
+  authenticate,
   upload.single("avatar"),
   authController.updateProfileAvatar,
 );
 
 router.post(
   "/profile/avatar",
+  authenticate,
   upload.single("avatar"),
   authController.updateProfileAvatar,
 );
 
-router.delete("/profile/avatar", authController.deleteProfileAvatar);
+router.delete("/profile/avatar", authenticate, authController.deleteProfileAvatar);
 
 router.post("/verify", authController.verify);
 

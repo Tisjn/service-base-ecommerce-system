@@ -15,6 +15,9 @@ public class ProductUpdateRequest {
     private BigDecimal price;
 
     @Min(0)
+    private BigDecimal purchasePrice;
+
+    @Min(0)
     private Integer stockQuantity;
 
     private String imageUrl;

@@ -35,7 +35,7 @@ function createSocketServer(server) {
   });
 
   io.on("connection", (socket) => {
-    registerChatSocket(io, socket);
+    registerChatSocket(socket);
   });
 
   return io;

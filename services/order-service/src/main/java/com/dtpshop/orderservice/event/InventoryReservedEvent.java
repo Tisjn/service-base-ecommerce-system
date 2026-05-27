@@ -17,5 +17,8 @@ public class InventoryReservedEvent {
     private String correlationId;
     private List<CartItemDto> cartItems;
     private BigDecimal totalAmount;
+    private String paymentMethod;
+    private String cartKey;
+    private String customerEmail;
     private LocalDateTime reservedAt;
 }

@@ -17,10 +17,22 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.MySQL8Dialect
-  redis:
-    host: ${SPRING_REDIS_HOST:localhost}
-    port: ${SPRING_REDIS_PORT:6379}
-    timeout: 60000
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:${SPRING_REDIS_HOST:localhost}}
+      port: ${SPRING_DATA_REDIS_PORT:${SPRING_REDIS_PORT:6379}}
+      timeout: ${SPRING_DATA_REDIS_TIMEOUT:1000ms}
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+
+product:
+  outbox:
+    publisher-delay-ms: ${PRODUCT_OUTBOX_PUBLISHER_DELAY_MS:3000}
+  cache:
+    warmup-enabled: ${PRODUCT_CACHE_WARMUP_ENABLED:true}
 
 management:
   endpoints:

@@ -168,8 +168,8 @@ See [DEPLOYMENT_TESTING_GUIDE.md](DEPLOYMENT_TESTING_GUIDE.md#local-development-
 ```
 Guest Add to Cart:
   → Session + guest:<sessionId>
-  → Cart saved to Redis (24h TTL)
-  → Data synced to Product Service
+  → Cart saved to Redis (24h TTL) in order-service
+  → product-service mirrors cart changes for guest/user flows via HTTP sync
 
 Login & Merge:
   → JWT generated + stored
@@ -178,7 +178,8 @@ Login & Merge:
   → Items appear immediately
 
 Create Order:
-  → OrderService reserves inventory
+  → OrderService saves PENDING order
+  → ProductService reserves inventory
   → PaymentService creates payment
   → RabbitMQ publishes order.created event
   → WebSocket notifies dashboard
@@ -189,7 +190,7 @@ Create Order:
 ### Caching Strategy
 
 - **Products:** Cache-aside pattern with Redis
-- **Cart:** Redis with 24-hour TTL
+- **Cart:** Redis with 24-hour TTL in order-service, plus cart sync from product-service
 - **Sessions:** Server-side + cookie-based for guests
 
 ### Event-Driven Communication

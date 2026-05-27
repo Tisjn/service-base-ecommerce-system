@@ -21,6 +21,10 @@ public class ProductRequest {
 
     @NotNull
     @Min(0)
+    private BigDecimal purchasePrice;
+
+    @NotNull
+    @Min(0)
     private Integer stockQuantity;
 
     private String imageUrl;

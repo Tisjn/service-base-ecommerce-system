@@ -62,12 +62,17 @@ export function formatDateTime(value) {
     return "Chưa có dữ liệu";
   }
 
-  const date = new Date(value);
+  const normalizedValue =
+    typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value)
+      ? `${value}Z`
+      : value;
+  const date = new Date(normalizedValue);
   if (Number.isNaN(date.getTime())) {
     return "Chưa có dữ liệu";
   }
 
   return new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);

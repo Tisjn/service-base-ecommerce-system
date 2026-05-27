@@ -1,15 +1,6 @@
-const bcrypt = require("bcryptjs");
-const env = require("../config/env");
-
-async function hashPassword(password) {
-  return bcrypt.hash(password, env.password.saltRounds);
-}
-
-async function comparePassword(password, hashedPassword) {
-  return bcrypt.compare(password, hashedPassword);
-}
+const passwordEncoder = require("../services/passwordEncoder.service");
 
 module.exports = {
-  hashPassword,
-  comparePassword,
+  hashPassword: passwordEncoder.hash,
+  comparePassword: passwordEncoder.matches,
 };

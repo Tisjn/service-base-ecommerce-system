@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@ConditionalOnProperty(name = "order.saga.payment-enabled", havingValue = "true")
+@ConditionalOnProperty(name = "order.legacy-saga-handlers-enabled", havingValue = "true")
 public class CompensationHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(CompensationHandler.class);

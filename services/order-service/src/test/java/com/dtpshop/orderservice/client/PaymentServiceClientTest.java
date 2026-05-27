@@ -19,7 +19,7 @@ import org.springframework.web.client.RestTemplate;
 class PaymentServiceClientTest {
 
     @Test
-    void shouldReturnMockApprovalWhenPaymentServiceIsUnavailable() {
+    void shouldFailMomoWhenPaymentServiceIsUnavailable() {
         RestTemplate restTemplate = mock(RestTemplate.class);
         when(restTemplate.exchange(
                 eq("http://localhost:3005/payments"),
@@ -31,6 +31,25 @@ class PaymentServiceClientTest {
         PaymentServiceClient client = new PaymentServiceClient(restTemplate, "http://localhost:3005");
 
         PaymentServiceClient.PaymentResult result = client.processPayment(42L, BigDecimal.valueOf(99.98), "corr-42");
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getPaymentId()).isNull();
+    }
+
+    @Test
+    void shouldReturnMockApprovalForCodWhenPaymentServiceIsUnavailable() {
+        RestTemplate restTemplate = mock(RestTemplate.class);
+        when(restTemplate.exchange(
+                eq("http://localhost:3005/payments"),
+                eq(HttpMethod.POST),
+                any(HttpEntity.class),
+                any(ParameterizedTypeReference.class)))
+                .thenThrow(new ResourceAccessException("Connection refused"));
+
+        PaymentServiceClient client = new PaymentServiceClient(restTemplate, "http://localhost:3005");
+
+        PaymentServiceClient.PaymentResult result = client.createPayment(
+                42L, BigDecimal.valueOf(99.98), "COD", "corr-42");
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getPaymentId()).isEqualTo("MOCK-PAYMENT-42");

@@ -4,6 +4,26 @@ Lightweight authentication microservice for ShopNova - OTP via SMTP, JWT access 
 
 AWS S3 is only required for `POST /auth/upload-avatar`. Register and login work without AWS configuration.
 
+## Architecture characteristics
+
+Target characteristics: Security, Availability, Maintainability.
+
+- Controller layer: `src/controllers/auth.controller.js` only maps HTTP requests to application use cases and sends responses.
+- Application service layer: `src/services/authApplication.service.js` coordinates register, login, refresh, logout, OTP verification, and password flows.
+- Token boundary: `src/services/jwt.service.js` depends on the `TokenProvider` abstraction in `src/providers/tokenProvider.js`; the active implementation is `src/providers/jwtTokenProvider.js`.
+- OTP boundary: `src/services/otp.service.js` owns OTP generation, Redis persistence, verification, attempt counting, expiry handling, and email dispatch.
+- Refresh token boundary: `src/services/refreshToken.service.js` owns Redis refresh token issue, validation, TTL renewal, and revoke.
+- Password boundary: `src/services/passwordEncoder.service.js` owns password hashing and password verification.
+- Security filters/middleware: `src/middlewares/authenticate.js` verifies access tokens before protected routes; `src/middlewares/rateLimiter.js` delegates brute-force protection to `src/services/rateLimit.service.js`.
+- Configuration boundary: `src/config/jwt.js`, `src/config/redis.js`, and `src/config/mailer.js` isolate JWT, Redis, and SMTP configuration.
+
+Patterns used:
+
+- Singleton: CommonJS modules are loaded once and reused as service singletons.
+- Strategy: `TokenProvider` allows replacing JWT with another token provider later.
+- Filter chain / decorator style: Express middlewares apply authentication, validation, rate limiting, and error handling around route handlers.
+- Factory Method: `rateLimit.service.js` creates configured limiter instances through `createRateLimiter`.
+
 ## Quick overview
 
 Endpoints

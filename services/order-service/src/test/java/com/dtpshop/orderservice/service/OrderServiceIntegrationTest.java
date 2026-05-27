@@ -17,6 +17,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -49,7 +50,7 @@ class OrderServiceIntegrationTest {
     private EventPublisherService eventPublisherService;
 
     @Test
-    void shouldCreatePendingCodOrderAndClearCartWithoutPublishingPaymentSaga() {
+    void shouldCreatePendingCodOrderAndPublishSagaEvent() {
         when(cartService.getCart("1")).thenReturn(List.of(
                 new CartItemDto(100L, "Suitcase", 2, new BigDecimal("49.99"))));
 
@@ -65,14 +66,15 @@ class OrderServiceIntegrationTest {
         Order order = orderService.createOrder(1L, "1", "customer@example.com", requestDto);
 
         assertThat(order.getId()).isNotNull();
-        assertThat(order.getTotalAmount()).isEqualByComparingTo(new BigDecimal("99.98"));
+        assertThat(order.getTotalAmount()).isEqualByComparingTo(new BigDecimal("10099.98"));
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
         assertThat(order.getUserId()).isEqualTo(1L);
         assertThat(order.getItems()).hasSize(1);
 
         verify(orderRepository).save(any(Order.class));
-        verify(cartService).clearCart("1");
-        verify(eventPublisherService, never()).publishOrderCreated(any());
+        verify(cartService, never()).clearCart("1");
+        verify(cartService).removeItems(eq("1"), anyList());
+        verify(eventPublisherService).publishOrderCreated(any());
     }
 
     @Test
