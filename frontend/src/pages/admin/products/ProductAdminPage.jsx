@@ -21,6 +21,7 @@ import {
   getCategories,
   getProduct,
   getProducts,
+  invalidateProductCache,
   permanentlyDeleteProduct,
   restoreProduct,
   updateCategory,
@@ -37,6 +38,18 @@ const currencyFormatter = new Intl.NumberFormat("vi-VN", {
 
 const PRODUCT_TABLE_PAGE_SIZE = 10;
 const ORDER_TABLE_PAGE_SIZE = 10;
+const AGENT_EXECUTED_EVENT = "dtpshop:agent-executed";
+const PRODUCT_AGENT_TOOLS = new Set([
+  "createProduct",
+  "updateProduct",
+  "deleteProduct",
+  "restoreProduct",
+  "permanentDeleteProduct",
+  "createCategory",
+  "updateCategory",
+  "deleteCategory",
+]);
+const ORDER_AGENT_TOOLS = new Set(["updateOrderStatus", "cancelOrder"]);
 
 const initialFormState = {
   name: "",
@@ -341,6 +354,53 @@ export default function ProductAdminPage({
   useEffect(() => {
     loadProducts(0);
   }, [loadProducts]);
+
+  useEffect(() => {
+    function handleAgentExecuted(event) {
+      const tools = Array.isArray(event.detail?.tools) ? event.detail.tools : [];
+      const changedProducts = tools.some((tool) => PRODUCT_AGENT_TOOLS.has(tool));
+      const changedOrders = tools.some((tool) => ORDER_AGENT_TOOLS.has(tool));
+
+      if (changedProducts) {
+        const productPage = tools.includes("createProduct")
+          ? 0
+          : pagination.page || 0;
+        invalidateProductCache();
+        loadCategories();
+        loadProducts(productPage);
+      }
+
+      if (changedOrders) {
+        loadAdminOrders(adminOrderPage);
+        if (selectedAdminOrderId) {
+          loadAdminOrderDetail(selectedAdminOrderId);
+        }
+      }
+
+      if (changedProducts || changedOrders) {
+        showNotification(
+          "success",
+          changedProducts && changedOrders
+            ? "AI agent đã cập nhật sản phẩm và đơn hàng."
+            : changedProducts
+              ? "AI agent đã cập nhật sản phẩm."
+              : "AI agent đã cập nhật trạng thái đơn hàng.",
+        );
+      }
+    }
+
+    window.addEventListener(AGENT_EXECUTED_EVENT, handleAgentExecuted);
+    return () =>
+      window.removeEventListener(AGENT_EXECUTED_EVENT, handleAgentExecuted);
+  }, [
+    adminOrderPage,
+    loadAdminOrderDetail,
+    loadAdminOrders,
+    loadCategories,
+    loadProducts,
+    pagination.page,
+    selectedAdminOrderId,
+  ]);
 
   useEffect(() => {
     if (activeAdminSection === "orders") {

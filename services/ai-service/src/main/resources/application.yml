@@ -25,3 +25,6 @@ ai:
     product-limit: ${AI_PRODUCT_LIMIT:50}
     order-limit: ${AI_ORDER_LIMIT:10}
     faq-limit: ${AI_FAQ_LIMIT:30}
+  agent:
+    gateway-base-url: ${AI_AGENT_GATEWAY_BASE_URL:http://localhost:8081/api}
+    plan-ttl-minutes: ${AI_AGENT_PLAN_TTL_MINUTES:10}

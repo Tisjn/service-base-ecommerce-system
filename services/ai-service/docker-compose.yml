@@ -18,6 +18,9 @@ services:
       - SERVER_PORT=3009
       - GOOGLE_AI_API_KEY=${GOOGLE_AI_API_KEY}
       - GOOGLE_AI_MODEL=${GOOGLE_AI_MODEL:-gemini-2.5-flash-lite}
+      - AI_AGENT_GATEWAY_BASE_URL=${AI_AGENT_GATEWAY_BASE_URL:-http://host.docker.internal:8081/api}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - app-network
     restart: on-failure

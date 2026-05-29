@@ -29,6 +29,29 @@ export async function askAiAssistant(question) {
   return response.data;
 }
 
+export async function planAiAgent(input) {
+  const response = await aiClient.post(
+    "/plan",
+    { input, dryRun: true },
+    { headers: authHeaders() },
+  );
+  return response.data;
+}
+
+export async function confirmAiAgent(planId, actions = []) {
+  const response = await aiClient.post(
+    "/confirm",
+    { planId, confirm: true, actions },
+    { headers: authHeaders() },
+  );
+  return response.data;
+}
+
+export async function getAiAgentHistory() {
+  const response = await aiClient.get("/history", { headers: authHeaders() });
+  return response.data;
+}
+
 export function getAiRetryAfterSeconds(error) {
   const serverValue = Number(error?.response?.data?.retryAfterSeconds);
   if (Number.isFinite(serverValue) && serverValue > 0) {

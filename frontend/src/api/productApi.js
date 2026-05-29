@@ -100,7 +100,7 @@ async function cachedGet(path, { ttl = PRODUCT_CACHE_TTL_MS, force = false } = {
   return request;
 }
 
-function invalidateProductCache() {
+export function invalidateProductCache() {
   for (const key of responseCache.keys()) {
     if (key.includes(":/products") || key.includes(":/categories")) {
       responseCache.delete(key);

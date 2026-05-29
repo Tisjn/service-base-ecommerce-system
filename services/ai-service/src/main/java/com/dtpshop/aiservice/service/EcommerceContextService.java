@@ -29,11 +29,13 @@ public class EcommerceContextService {
                        p.name,
                        p.description,
                        p.price,
+                       p.purchase_price AS purchasePrice,
                        p.stock_quantity AS stockQuantity,
                        p.reserved_quantity AS reservedQuantity,
                        GREATEST(p.stock_quantity - p.reserved_quantity, 0) AS availableQuantity,
                        p.image_url AS imageUrl,
                        p.status,
+                       p.category_id AS categoryId,
                        c.name AS categoryName
                 FROM products p
                 LEFT JOIN categories c ON c.id = p.category_id
@@ -84,5 +86,26 @@ public class EcommerceContextService {
                 """, properties.faqLimit());
 
         return new EcommerceContext(categories, products, orders, orderItems, faqPolicy);
+    }
+
+    public List<Map<String, Object>> findProductsForAgentLookup() {
+        return jdbcTemplate.queryForList("""
+                SELECT p.id,
+                       p.name,
+                       p.description,
+                       p.price,
+                       p.purchase_price AS purchasePrice,
+                       p.stock_quantity AS stockQuantity,
+                       p.image_url AS imageUrl,
+                       p.status,
+                       p.category_id AS categoryId,
+                       c.name AS categoryName,
+                       p.deleted_at AS deletedAt,
+                       p.updated_at AS updatedAt
+                FROM products p
+                LEFT JOIN categories c ON c.id = p.category_id
+                ORDER BY p.updated_at DESC, p.id DESC
+                LIMIT 500
+                """);
     }
 }

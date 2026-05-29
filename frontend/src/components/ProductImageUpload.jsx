@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useId, useState } from "react";
 import { uploadProductImage, validateImageFile } from "../api/productImageApi";
 import "../styles/ProductImageUpload.css";
 
@@ -10,6 +10,7 @@ export default function ProductImageUpload({
   onImageUpload,
   initialImage = null,
 }) {
+  const inputId = useId();
   const [preview, setPreview] = useState(initialImage);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
@@ -73,12 +74,12 @@ export default function ProductImageUpload({
   return (
     <div className="product-image-upload">
       <div className="upload-container">
-        <label htmlFor="image-input" className="upload-label">
+        <label htmlFor={inputId} className="upload-label">
           <div className="upload-area">
             {preview ? (
               <img
                 src={preview}
-                alt="Product preview"
+                alt="Xem trước ảnh sản phẩm"
                 className="preview-image"
               />
             ) : (
@@ -95,16 +96,16 @@ export default function ProductImageUpload({
                   <polyline points="17 8 12 3 7 8"></polyline>
                   <line x1="12" y1="3" x2="12" y2="15"></line>
                 </svg>
-                <p>Upload Product Image</p>
+                <p>Tải ảnh sản phẩm</p>
                 <p className="sub-text">
-                  Drag and drop or click to select (JPEG, PNG, GIF, WebP - Max
+                  Kéo thả hoặc bấm để chọn ảnh (JPEG, PNG, GIF, WebP - tối đa
                   5MB)
                 </p>
               </div>
             )}
           </div>
           <input
-            id="image-input"
+            id={inputId}
             type="file"
             accept="image/jpeg,image/png,image/gif,image/webp"
             onChange={handleFileChange}
@@ -120,7 +121,7 @@ export default function ProductImageUpload({
             className="clear-button"
             disabled={uploading}
           >
-            Clear
+            Xóa ảnh
           </button>
         )}
       </div>
@@ -128,7 +129,7 @@ export default function ProductImageUpload({
       {uploading && (
         <div className="status-message loading">
           <div className="spinner"></div>
-          <span>Uploading to S3...</span>
+          <span>Đang tải ảnh lên S3...</span>
         </div>
       )}
 
@@ -147,7 +148,7 @@ export default function ProductImageUpload({
 
       {success && (
         <div className="status-message success">
-          <span>Image uploaded successfully!</span>
+          <span>Tải ảnh thành công!</span>
           <button
             type="button"
             onClick={() => setSuccess(false)}
