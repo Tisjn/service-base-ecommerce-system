@@ -83,6 +83,8 @@ services:
       - SERVICE_HTTP_READ_TIMEOUT_MS=15000
       # Application port
       - SERVER_PORT=3004
+      - SESSION_COOKIE_SAME_SITE=${SESSION_COOKIE_SAME_SITE:-Lax}
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-false}
     depends_on:
       redis-cache:
         condition: service_healthy

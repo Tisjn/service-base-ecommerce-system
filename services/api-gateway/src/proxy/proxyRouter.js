@@ -49,6 +49,9 @@ function createProxy(target, options = {}) {
     ws: Boolean(options.ws),
     logLevel: "warn",
     pathRewrite: options.pathRewrite,
+    onProxyReq(proxyReq) {
+      proxyReq.removeHeader("origin");
+    },
     onError(error, req, res) {
       logger.error(
         `Proxy error ${req.method} ${req.originalUrl} -> ${target}: ${error.message}`,

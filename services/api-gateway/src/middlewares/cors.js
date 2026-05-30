@@ -1,11 +1,18 @@
 const cors = require("cors");
 const { config } = require("../config/routes.config");
 
-const defaultOrigins = [config.frontendUrl, "http://127.0.0.1:5173"];
+const defaultOrigins = [config.frontendUrl, "http://localhost:5173", "http://127.0.0.1:5173"];
 
-const allowedOrigins = Array.from(new Set((process.env.CORS_ORIGINS || defaultOrigins.join(","))
-  .split(",")
-  .map((origin) => origin.trim())
+function normalizeOrigin(origin) {
+  return String(origin || "").trim().replace(/\/+$/, "");
+}
+
+const allowedOrigins = Array.from(new Set([
+  ...defaultOrigins,
+  ...(process.env.CORS_ORIGINS || "")
+    .split(","),
+]
+  .map(normalizeOrigin)
   .filter(Boolean)
   .flatMap((origin) => {
     if (origin === "http://localhost:5173") {
@@ -19,7 +26,9 @@ const allowedOrigins = Array.from(new Set((process.env.CORS_ORIGINS || defaultOr
 
 module.exports = cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
+    const requestOrigin = normalizeOrigin(origin);
+
+    if (!origin || allowedOrigins.includes("*") || allowedOrigins.includes(requestOrigin)) {
       callback(null, true);
       return;
     }

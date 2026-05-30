@@ -38,7 +38,7 @@ async function verifyJWT(req, res, next) {
   }
 }
 
-function optionalVerifyJWT(req, _res, next) {
+async function optionalVerifyJWT(req, _res, next) {
   const token = getBearerToken(req);
 
   if (!token) {
@@ -46,7 +46,19 @@ function optionalVerifyJWT(req, _res, next) {
     return;
   }
 
-  verifyJWT(req, _res, next);
+  try {
+    const response = await axios.post(
+      `${config.authServiceUrl}/auth/verify`,
+      { token },
+      { timeout: Number(process.env.AUTH_VERIFY_TIMEOUT_MS || 5000) },
+    );
+
+    injectUserHeaders(req, response.data || {});
+  } catch (_error) {
+    delete req.headers.authorization;
+  }
+
+  next();
 }
 
 module.exports = {
