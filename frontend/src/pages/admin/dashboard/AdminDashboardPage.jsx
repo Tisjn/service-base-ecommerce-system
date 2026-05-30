@@ -16,6 +16,7 @@ const LOW_STOCK_THRESHOLD = 5;
 const REVIEW_SAMPLE_COUNT = 5;
 const DASHBOARD_FAST_RENDER_MS = 900;
 const DASHBOARD_CACHE_KEY = "dtpshop.adminDashboard.snapshot";
+const DASHBOARD_CACHE_TTL_MS = 60 * 1000;
 const AGENT_EXECUTED_EVENT = "dtpshop:agent-executed";
 
 export default function AdminDashboardPage({ onSectionChange }) {
@@ -1207,14 +1208,31 @@ function getInventoryValue(product) {
 }
 
 function readDashboardSnapshot() {
-  return null;
+  try {
+    const raw = window.sessionStorage.getItem(DASHBOARD_CACHE_KEY);
+    if (!raw) return null;
+    const snapshot = JSON.parse(raw);
+    if (!snapshot?.savedAt || Date.now() - snapshot.savedAt > DASHBOARD_CACHE_TTL_MS) {
+      window.sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
+      return null;
+    }
+    return snapshot;
+  } catch {
+    return null;
+  }
 }
 
-function writeDashboardSnapshot() {
+function writeDashboardSnapshot(snapshot) {
   try {
-    window.sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
+    window.sessionStorage.setItem(
+      DASHBOARD_CACHE_KEY,
+      JSON.stringify({
+        ...snapshot,
+        savedAt: Date.now(),
+      }),
+    );
   } catch {
-    // Ignore storage failures; dashboard data is always refreshed from services.
+    // Fresh API data is still rendered when sessionStorage is unavailable.
   }
 }
 

@@ -105,6 +105,26 @@ function writeAdminCache(key, value) {
   }
 }
 
+function removeAdminCache(key) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(`${ADMIN_CACHE_PREFIX}${key}`);
+  } catch {
+    // Cache invalidation is a speed hint only.
+  }
+}
+
+function removeAdminCacheByPrefix(prefix) {
+  if (typeof window === "undefined") return;
+  try {
+    Object.keys(window.sessionStorage)
+      .filter((key) => key.startsWith(`${ADMIN_CACHE_PREFIX}${prefix}`))
+      .forEach((key) => window.sessionStorage.removeItem(key));
+  } catch {
+    // Cache invalidation is a speed hint only.
+  }
+}
+
 function buildOrderMeta(data, page, orders) {
   return {
     page: Number(data?.number ?? page) || 0,
@@ -193,7 +213,20 @@ export default function ProductAdminPage({
 
   const loadAdminOrders = useCallback(
     async (page = adminOrderPage) => {
-      setAdminOrdersLoading(true);
+      const cacheKey = getOrderCacheKey(
+        page,
+        orderStatusFilter,
+        orderFilterDate,
+        orderSortDirection,
+      );
+      const cached = readAdminCache(cacheKey);
+      if (cached) {
+        setAdminOrders(Array.isArray(cached.orders) ? cached.orders : []);
+        setAdminOrderMeta((prev) => ({ ...prev, ...cached.meta }));
+        setAdminOrdersLoading(false);
+      } else {
+        setAdminOrdersLoading(true);
+      }
       setAdminOrdersError("");
       const fastRenderTimer = window.setTimeout(
         () => setAdminOrdersLoading(false),
@@ -215,6 +248,7 @@ export default function ProductAdminPage({
         const nextMeta = buildOrderMeta(data, page, nextOrders);
         setAdminOrders(nextOrders);
         setAdminOrderMeta(nextMeta);
+        writeAdminCache(cacheKey, { orders: nextOrders, meta: nextMeta });
       } catch (error) {
         setAdminOrdersError(error.message || "Không tải được đơn hàng.");
       } finally {
@@ -227,10 +261,22 @@ export default function ProductAdminPage({
 
   const loadAdminOrderDetail = useCallback(async (orderId) => {
     if (!orderId) return;
-    setSelectedAdminOrderLoading(true);
-    setSelectedAdminOrderCustomer(null);
-    setSelectedAdminOrderAddress(null);
-    setSelectedAdminOrderComments([]);
+    const cacheKey = `order-detail:${orderId}`;
+    const cached = readAdminCache(cacheKey);
+    if (cached) {
+      setSelectedAdminOrder(cached.order || null);
+      setSelectedAdminOrderComments(
+        Array.isArray(cached.comments) ? cached.comments : [],
+      );
+      setSelectedAdminOrderCustomer(cached.customer || null);
+      setSelectedAdminOrderAddress(cached.address || null);
+      setSelectedAdminOrderLoading(false);
+    } else {
+      setSelectedAdminOrderLoading(true);
+      setSelectedAdminOrderCustomer(null);
+      setSelectedAdminOrderAddress(null);
+      setSelectedAdminOrderComments([]);
+    }
     setSelectedAdminOrderError("");
     const fastRenderTimer = window.setTimeout(
       () => setSelectedAdminOrderLoading(false),
@@ -246,25 +292,34 @@ export default function ProductAdminPage({
         Array.isArray(commentsResult) ? commentsResult : [],
       );
       setSelectedAdminOrderLoading(false);
+      let nextCustomer = null;
+      let nextAddress = null;
       if (orderResult?.userId) {
         const [customerResult, addressesResult] = await Promise.allSettled([
           getUserById(orderResult.userId),
           getUserAddressesById(orderResult.userId),
         ]);
         if (customerResult.status === "fulfilled") {
-          setSelectedAdminOrderCustomer(customerResult.value);
+          nextCustomer = customerResult.value;
+          setSelectedAdminOrderCustomer(nextCustomer);
         }
         if (addressesResult.status === "fulfilled") {
           const addresses = Array.isArray(addressesResult.value)
             ? addressesResult.value
             : [];
-          const nextAddress =
+          nextAddress =
             addresses.find(
               (address) => String(address.id) === String(orderResult.addressId),
             ) || null;
           setSelectedAdminOrderAddress(nextAddress);
         }
       }
+      writeAdminCache(cacheKey, {
+        order: orderResult,
+        comments: Array.isArray(commentsResult) ? commentsResult : [],
+        customer: nextCustomer,
+        address: nextAddress,
+      });
     } catch (error) {
       setSelectedAdminOrderError(
         error.message || "Không tải được chi tiết đơn hàng.",
@@ -629,6 +684,8 @@ export default function ProductAdminPage({
     setOrderStatusUpdating(true);
     try {
       await orderApi.updateOrderStatus(selectedAdminOrderId, newStatus);
+      removeAdminCacheByPrefix("orders:");
+      removeAdminCache(`order-detail:${selectedAdminOrderId}`);
       showNotification("success", `Đã chuyển đơn sang ${newStatus}.`);
       await Promise.all([
         loadAdminOrders(adminOrderPage),
