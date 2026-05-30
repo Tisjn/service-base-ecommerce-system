@@ -193,20 +193,7 @@ export default function ProductAdminPage({
 
   const loadAdminOrders = useCallback(
     async (page = adminOrderPage) => {
-      const cacheKey = getOrderCacheKey(
-        page,
-        orderStatusFilter,
-        orderFilterDate,
-        orderSortDirection,
-      );
-      const cached = readAdminCache(cacheKey);
-      if (cached) {
-        setAdminOrders(Array.isArray(cached.orders) ? cached.orders : []);
-        setAdminOrderMeta((prev) => ({ ...prev, ...cached.meta }));
-        setAdminOrdersLoading(false);
-      } else {
-        setAdminOrdersLoading(true);
-      }
+      setAdminOrdersLoading(true);
       setAdminOrdersError("");
       const fastRenderTimer = window.setTimeout(
         () => setAdminOrdersLoading(false),
@@ -228,7 +215,6 @@ export default function ProductAdminPage({
         const nextMeta = buildOrderMeta(data, page, nextOrders);
         setAdminOrders(nextOrders);
         setAdminOrderMeta(nextMeta);
-        writeAdminCache(cacheKey, { orders: nextOrders, meta: nextMeta });
       } catch (error) {
         setAdminOrdersError(error.message || "Không tải được đơn hàng.");
       } finally {
@@ -241,22 +227,10 @@ export default function ProductAdminPage({
 
   const loadAdminOrderDetail = useCallback(async (orderId) => {
     if (!orderId) return;
-    const cacheKey = `order-detail:${orderId}`;
-    const cached = readAdminCache(cacheKey);
-    if (cached) {
-      setSelectedAdminOrder(cached.order || null);
-      setSelectedAdminOrderComments(
-        Array.isArray(cached.comments) ? cached.comments : [],
-      );
-      setSelectedAdminOrderCustomer(cached.customer || null);
-      setSelectedAdminOrderAddress(cached.address || null);
-      setSelectedAdminOrderLoading(false);
-    } else {
-      setSelectedAdminOrderLoading(true);
-      setSelectedAdminOrderCustomer(null);
-      setSelectedAdminOrderAddress(null);
-      setSelectedAdminOrderComments([]);
-    }
+    setSelectedAdminOrderLoading(true);
+    setSelectedAdminOrderCustomer(null);
+    setSelectedAdminOrderAddress(null);
+    setSelectedAdminOrderComments([]);
     setSelectedAdminOrderError("");
     const fastRenderTimer = window.setTimeout(
       () => setSelectedAdminOrderLoading(false),
@@ -272,34 +246,25 @@ export default function ProductAdminPage({
         Array.isArray(commentsResult) ? commentsResult : [],
       );
       setSelectedAdminOrderLoading(false);
-      let nextCustomer = null;
-      let nextAddress = null;
       if (orderResult?.userId) {
         const [customerResult, addressesResult] = await Promise.allSettled([
           getUserById(orderResult.userId),
           getUserAddressesById(orderResult.userId),
         ]);
         if (customerResult.status === "fulfilled") {
-          nextCustomer = customerResult.value;
           setSelectedAdminOrderCustomer(customerResult.value);
         }
         if (addressesResult.status === "fulfilled") {
           const addresses = Array.isArray(addressesResult.value)
             ? addressesResult.value
             : [];
-          nextAddress =
+          const nextAddress =
             addresses.find(
               (address) => String(address.id) === String(orderResult.addressId),
             ) || null;
           setSelectedAdminOrderAddress(nextAddress);
         }
       }
-      writeAdminCache(cacheKey, {
-        order: orderResult,
-        comments: Array.isArray(commentsResult) ? commentsResult : [],
-        customer: nextCustomer,
-        address: nextAddress,
-      });
     } catch (error) {
       setSelectedAdminOrderError(
         error.message || "Không tải được chi tiết đơn hàng.",

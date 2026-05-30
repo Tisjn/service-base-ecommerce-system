@@ -3,6 +3,11 @@ const API_GATEWAY_URL =
   import.meta.env.VITE_API_URL ||
   "http://localhost:8081";
 const API_BASE_URL = `${API_GATEWAY_URL.replace(/\/$/, "")}/api`;
+const ORDER_GET_RETRY_ATTEMPTS = 3;
+const ORDER_GET_RETRY_DELAY_MS = 3000;
+const ORDER_MUTATION_RATE_LIMIT_MS = 5000;
+
+let lastOrderMutationAt = 0;
 
 function getAuthHeaders() {
   const headers = {};
@@ -22,8 +27,27 @@ function wait(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+function assertOrderMutationAllowed() {
+  const now = Date.now();
+  const remainingMs =
+    ORDER_MUTATION_RATE_LIMIT_MS - (now - lastOrderMutationAt);
+  if (remainingMs > 0) {
+    const seconds = Math.ceil(remainingMs / 1000);
+    throw new Error(
+      `Vui long doi ${seconds}s truoc khi tao don/thanh toan tiep.`,
+    );
+  }
+  lastOrderMutationAt = now;
+}
+
 async function requestWithFallback(path, options = {}) {
-  const attempts = isRetriableRequest(options) ? 3 : 1;
+  const attempts = isRetriableRequest(options)
+    ? options.retryAttempts || ORDER_GET_RETRY_ATTEMPTS
+    : 1;
+  const retryDelayMs = options.retryDelayMs || ORDER_GET_RETRY_DELAY_MS;
+  const fetchOptions = { ...options };
+  delete fetchOptions.retryAttempts;
+  delete fetchOptions.retryDelayMs;
   let lastError;
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -31,11 +55,11 @@ async function requestWithFallback(path, options = {}) {
       const response = await fetch(`${API_BASE_URL}${path}`, {
         // Gửi kèm JSESSIONID để order-service nhận diện giỏ hàng của guest.
         credentials: "include",
-        ...options,
+        ...fetchOptions,
       });
       if (response.status >= 500 && attempt < attempts - 1) {
         lastError = new Error(response.statusText || "Server error");
-        await wait(350 * (attempt + 1));
+        await wait(retryDelayMs);
         continue;
       }
       return response;
@@ -44,7 +68,7 @@ async function requestWithFallback(path, options = {}) {
       if (attempt >= attempts - 1) {
         throw error;
       }
-      await wait(350 * (attempt + 1));
+      await wait(retryDelayMs);
     }
   }
 
@@ -130,6 +154,7 @@ export async function notifyCartOnLogout() {
 }
 
 export async function createOrder(orderData) {
+  assertOrderMutationAllowed();
   const response = await requestWithFallback("/orders", {
     method: "POST",
     headers: {

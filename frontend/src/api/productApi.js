@@ -118,6 +118,7 @@ export async function getProducts({
   status,
   sortBy = "createdAt",
   direction = "desc",
+  force = false,
 } = {}) {
   const params = new URLSearchParams();
   params.set("page", page);
@@ -130,11 +131,11 @@ export async function getProducts({
   params.set("sortBy", sortBy);
   params.set("direction", direction);
 
-  return cachedGet(`/products?${params.toString()}`);
+  return cachedGet(`/products?${params.toString()}`, { force });
 }
 
-export async function getCategories() {
-  return cachedGet("/categories", { ttl: CATEGORY_CACHE_TTL_MS });
+export async function getCategories({ force = false } = {}) {
+  return cachedGet("/categories", { ttl: CATEGORY_CACHE_TTL_MS, force });
 }
 
 export async function getProduct(productId) {

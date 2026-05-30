@@ -16,7 +16,7 @@ const LOW_STOCK_THRESHOLD = 5;
 const REVIEW_SAMPLE_COUNT = 5;
 const DASHBOARD_FAST_RENDER_MS = 900;
 const DASHBOARD_CACHE_KEY = "dtpshop.adminDashboard.snapshot";
-const DASHBOARD_CACHE_TTL_MS = 2 * 60 * 1000;
+const AGENT_EXECUTED_EVENT = "dtpshop:agent-executed";
 
 export default function AdminDashboardPage({ onSectionChange }) {
   const [orders, setOrders] = useState([]);
@@ -62,12 +62,13 @@ export default function AdminDashboardPage({ onSectionChange }) {
         size: 100,
         sortBy: "createdAt",
         direction: "desc",
+        force: true,
       }).then((data) => {
         const nextProducts = normalizeCollection(data);
         setProducts(nextProducts);
         return data;
       });
-      const categoriesPromise = getCategories().then((data) => {
+      const categoriesPromise = getCategories({ force: true }).then((data) => {
         const nextCategories = normalizeCollection(data);
         setCategories(nextCategories);
         return data;
@@ -178,6 +179,13 @@ export default function AdminDashboardPage({ onSectionChange }) {
 
   useEffect(() => {
     loadDashboard();
+  }, [loadDashboard]);
+
+  useEffect(() => {
+    window.addEventListener(AGENT_EXECUTED_EVENT, loadDashboard);
+    return () => {
+      window.removeEventListener(AGENT_EXECUTED_EVENT, loadDashboard);
+    };
   }, [loadDashboard]);
 
   const dashboard = useMemo(
@@ -1199,31 +1207,14 @@ function getInventoryValue(product) {
 }
 
 function readDashboardSnapshot() {
-  try {
-    const raw = window.sessionStorage.getItem(DASHBOARD_CACHE_KEY);
-    if (!raw) return null;
-    const snapshot = JSON.parse(raw);
-    if (!snapshot?.savedAt || Date.now() - snapshot.savedAt > DASHBOARD_CACHE_TTL_MS) {
-      window.sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
-      return null;
-    }
-    return snapshot;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
-function writeDashboardSnapshot(snapshot) {
+function writeDashboardSnapshot() {
   try {
-    window.sessionStorage.setItem(
-      DASHBOARD_CACHE_KEY,
-      JSON.stringify({
-        ...snapshot,
-        savedAt: Date.now(),
-      }),
-    );
+    window.sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
   } catch {
-    // Cache is a speed hint only; ignore storage quota and private-mode failures.
+    // Ignore storage failures; dashboard data is always refreshed from services.
   }
 }
 

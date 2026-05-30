@@ -45,16 +45,18 @@ public class AiController {
     @PostMapping("/ask")
     public ResponseEntity<AiAskResponse> ask(
             @RequestHeader(value = "X-User-Id", required = false) String userIdHeader,
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @Valid @RequestBody AiAskRequest request) {
         long userId = requireUserId(userIdHeader);
-        return ResponseEntity.ok(aiAssistantService.ask(userId, request.question()));
+        return ResponseEntity.ok(aiAssistantService.ask(userId, request.question(), isAdmin(userRole)));
     }
 
     @GetMapping("/summary")
     public ResponseEntity<AiSummaryResponse> summary(
-            @RequestHeader(value = "X-User-Id", required = false) String userIdHeader) {
+            @RequestHeader(value = "X-User-Id", required = false) String userIdHeader,
+            @RequestHeader(value = "X-User-Role", required = false) String userRole) {
         long userId = requireUserId(userIdHeader);
-        return ResponseEntity.ok(aiAssistantService.summary(userId));
+        return ResponseEntity.ok(aiAssistantService.summary(userId, isAdmin(userRole)));
     }
 
     @PostMapping("/plan")
@@ -113,6 +115,10 @@ public class AiController {
         } catch (NumberFormatException ex) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid X-User-Id");
         }
+    }
+
+    private boolean isAdmin(String userRole) {
+        return userRole != null && userRole.toUpperCase().contains("ADMIN");
     }
 
     private record HealthResponse(String status, String service) {

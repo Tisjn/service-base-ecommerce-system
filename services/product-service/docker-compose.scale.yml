@@ -1,0 +1,87 @@
+services:
+  redis-cache:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - product_scale_redis_data:/data
+    networks:
+      - product-scale-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    networks:
+      - product-scale-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  product-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - RDS_HOST=${RDS_HOST:-database-1-instance-1.cvwyy4mmuaiw.ap-southeast-1.rds.amazonaws.com}
+      - RDS_PORT=${RDS_PORT:-3306}
+      - RDS_DB=${RDS_DB:-ecommerce_data}
+      - RDS_USER=${RDS_USER:-admin}
+      - RDS_PASSWORD=${RDS_PASSWORD:-Tinle091104}
+      - RDS_SSL=${RDS_SSL:-false}
+      - SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL:-jdbc:mysql://database-1-instance-1.cvwyy4mmuaiw.ap-southeast-1.rds.amazonaws.com:3306/ecommerce_data?useSSL=false&allowPublicKeyRetrieval=true}
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME:-admin}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD:-Tinle091104}
+      - SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=${SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:-2}
+      - SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=${SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE:-0}
+      - SPRING_DATA_REDIS_HOST=redis-cache
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_TIMEOUT=1000ms
+      - SPRING_REDIS_HOST=redis-cache
+      - SPRING_REDIS_PORT=6379
+      - REDIS_HOST=redis-cache
+      - REDIS_PORT=6379
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
+      - ORDER_SERVICE_URL=${ORDER_SERVICE_URL:-http://host.docker.internal:3004}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-s3-dynamodb-phuc}
+      - SERVER_PORT=3003
+      - JWT_SECRET=${JWT_SECRET:-0a8e7a473e35d1080204701f57ba0cb86641689c11998b16662f96be329c2ac3}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis-cache:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - product-scale-network
+    restart: on-failure
+
+  product-lb:
+    image: nginx:1.27-alpine
+    ports:
+      - "3003:3003"
+    volumes:
+      - ./nginx.scale.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - product-service
+    networks:
+      - product-scale-network
+    restart: unless-stopped
+
+volumes:
+  product_scale_redis_data:
+
+networks:
+  product-scale-network:
+    driver: bridge

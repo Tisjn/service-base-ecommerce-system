@@ -8,5 +8,6 @@ public record EcommerceContext(
         List<Map<String, Object>> products,
         List<Map<String, Object>> orders,
         List<Map<String, Object>> orderItems,
-        List<Map<String, Object>> faqPolicy) {
+        List<Map<String, Object>> faqPolicy,
+        Map<String, Object> adminDashboard) {
 }
