@@ -26,6 +26,8 @@ services:
       - MOMO_PARTNER_NAME=${MOMO_PARTNER_NAME:-Test}
       - MOMO_STORE_ID=${MOMO_STORE_ID:-MomoTestStore}
       - MOMO_LANG=${MOMO_LANG:-vi}
+      - SERVICE_HTTP_CONNECT_TIMEOUT_MS=${SERVICE_HTTP_CONNECT_TIMEOUT_MS:-3000}
+      - SERVICE_HTTP_READ_TIMEOUT_MS=${SERVICE_HTTP_READ_TIMEOUT_MS:-12000}
     networks:
       - app-network
     restart: on-failure

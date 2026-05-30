@@ -24,6 +24,7 @@ D:\2.University\4.Semester_2_2025-2026\2.Software_architecture\4.Demo_2\service-
 D:\2.University\4.Semester_2_2025-2026\2.Software_architecture\4.Demo_2\service-base-ecommerce-system\services\order-service\src\main\java\com\dtpshop\orderservice\repository\OrderRepository.java
 D:\2.University\4.Semester_2_2025-2026\2.Software_architecture\4.Demo_2\service-base-ecommerce-system\services\order-service\src\main\java\com\dtpshop\orderservice\service\EventPublisherService.java
 D:\2.University\4.Semester_2_2025-2026\2.Software_architecture\4.Demo_2\service-base-ecommerce-system\services\order-service\src\main\java\com\dtpshop\orderservice\service\OrderSideEffectScheduler.java
+D:\2.University\4.Semester_2_2025-2026\2.Software_architecture\4.Demo_2\service-base-ecommerce-system\services\order-service\src\main\java\com\dtpshop\orderservice\config\OrderSchemaInitializer.java
 D:\2.University\4.Semester_2_2025-2026\2.Software_architecture\4.Demo_2\service-base-ecommerce-system\services\order-service\src\main\java\com\dtpshop\orderservice\repository\CartRepository.java
 D:\2.University\4.Semester_2_2025-2026\2.Software_architecture\4.Demo_2\service-base-ecommerce-system\services\order-service\src\main\java\com\dtpshop\orderservice\websocket\WebSocketConfig.java
 D:\2.University\4.Semester_2_2025-2026\2.Software_architecture\4.Demo_2\service-base-ecommerce-system\services\order-service\src\main\java\com\dtpshop\orderservice\command\FinalizeOrderCommand.java

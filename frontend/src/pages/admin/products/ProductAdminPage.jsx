@@ -38,6 +38,9 @@ const currencyFormatter = new Intl.NumberFormat("vi-VN", {
 
 const PRODUCT_TABLE_PAGE_SIZE = 10;
 const ORDER_TABLE_PAGE_SIZE = 10;
+const ADMIN_FAST_RENDER_MS = 900;
+const ADMIN_CACHE_TTL_MS = 2 * 60 * 1000;
+const ADMIN_CACHE_PREFIX = "dtpshop.admin.";
 const AGENT_EXECUTED_EVENT = "dtpshop:agent-executed";
 const PRODUCT_AGENT_TOOLS = new Set([
   "createProduct",
@@ -72,6 +75,52 @@ const statusOptions = [
   { value: "ACTIVE", label: "Đang bán" },
   { value: "HIDDEN", label: "Đang ẩn" },
 ];
+
+function readAdminCache(key) {
+  if (typeof window === "undefined") return null;
+  try {
+    const storageKey = `${ADMIN_CACHE_PREFIX}${key}`;
+    const raw = window.sessionStorage.getItem(storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.savedAt || Date.now() - parsed.savedAt > ADMIN_CACHE_TTL_MS) {
+      window.sessionStorage.removeItem(storageKey);
+      return null;
+    }
+    return parsed.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writeAdminCache(key, value) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      `${ADMIN_CACHE_PREFIX}${key}`,
+      JSON.stringify({ savedAt: Date.now(), value }),
+    );
+  } catch {
+    // Fresh API data is still rendered when sessionStorage is unavailable.
+  }
+}
+
+function buildOrderMeta(data, page, orders) {
+  return {
+    page: Number(data?.number ?? page) || 0,
+    size: Number(data?.size ?? ORDER_TABLE_PAGE_SIZE) || ORDER_TABLE_PAGE_SIZE,
+    totalPages: Number(data?.totalPages ?? 1) || 1,
+    totalElements: Number(data?.totalElements ?? orders.length) || 0,
+  };
+}
+
+function getOrderCacheKey(page, status, date, direction) {
+  return `orders:${page}:${status || "all"}:${date || "all"}:${direction}`;
+}
+
+function getProductCacheKey(page, size, filter) {
+  return `products:${page}:${size}:${filter.search || ""}:${filter.status || "all"}:${filter.categoryId || "all"}`;
+}
 
 export default function ProductAdminPage({
   user,
@@ -137,16 +186,32 @@ export default function ProductAdminPage({
     useState(false);
   const [selectedAdminOrderError, setSelectedAdminOrderError] = useState("");
   const [orderStatusUpdating, setOrderStatusUpdating] = useState(false);
-  const { openedOrderId, lastNotification } =
-    useOrderNotifications() || {
-      openedOrderId: null,
-      lastNotification: null,
-    };
+  const { openedOrderId, lastNotification } = useOrderNotifications() || {
+    openedOrderId: null,
+    lastNotification: null,
+  };
 
   const loadAdminOrders = useCallback(
     async (page = adminOrderPage) => {
-      setAdminOrdersLoading(true);
+      const cacheKey = getOrderCacheKey(
+        page,
+        orderStatusFilter,
+        orderFilterDate,
+        orderSortDirection,
+      );
+      const cached = readAdminCache(cacheKey);
+      if (cached) {
+        setAdminOrders(Array.isArray(cached.orders) ? cached.orders : []);
+        setAdminOrderMeta((prev) => ({ ...prev, ...cached.meta }));
+        setAdminOrdersLoading(false);
+      } else {
+        setAdminOrdersLoading(true);
+      }
       setAdminOrdersError("");
+      const fastRenderTimer = window.setTimeout(
+        () => setAdminOrdersLoading(false),
+        ADMIN_FAST_RENDER_MS,
+      );
       try {
         const data = await orderApi.getAllOrders({
           page,
@@ -160,39 +225,43 @@ export default function ProductAdminPage({
           : Array.isArray(data)
             ? data
             : [];
+        const nextMeta = buildOrderMeta(data, page, nextOrders);
         setAdminOrders(nextOrders);
-        setAdminOrderMeta({
-          page: Number(data?.number ?? page) || 0,
-          size:
-            Number(data?.size ?? ORDER_TABLE_PAGE_SIZE) ||
-            ORDER_TABLE_PAGE_SIZE,
-          totalPages: Number(data?.totalPages ?? 1) || 1,
-          totalElements:
-            Number(data?.totalElements ?? nextOrders.length) || 0,
-        });
+        setAdminOrderMeta(nextMeta);
+        writeAdminCache(cacheKey, { orders: nextOrders, meta: nextMeta });
       } catch (error) {
-        setAdminOrdersError(
-          error.message || "Không tải được đơn hàng.",
-        );
+        setAdminOrdersError(error.message || "Không tải được đơn hàng.");
       } finally {
+        window.clearTimeout(fastRenderTimer);
         setAdminOrdersLoading(false);
       }
     },
-    [
-      adminOrderPage,
-      orderFilterDate,
-      orderSortDirection,
-      orderStatusFilter,
-    ],
+    [adminOrderPage, orderFilterDate, orderSortDirection, orderStatusFilter],
   );
 
   const loadAdminOrderDetail = useCallback(async (orderId) => {
     if (!orderId) return;
-    setSelectedAdminOrderLoading(true);
+    const cacheKey = `order-detail:${orderId}`;
+    const cached = readAdminCache(cacheKey);
+    if (cached) {
+      setSelectedAdminOrder(cached.order || null);
+      setSelectedAdminOrderComments(
+        Array.isArray(cached.comments) ? cached.comments : [],
+      );
+      setSelectedAdminOrderCustomer(cached.customer || null);
+      setSelectedAdminOrderAddress(cached.address || null);
+      setSelectedAdminOrderLoading(false);
+    } else {
+      setSelectedAdminOrderLoading(true);
+      setSelectedAdminOrderCustomer(null);
+      setSelectedAdminOrderAddress(null);
+      setSelectedAdminOrderComments([]);
+    }
     setSelectedAdminOrderError("");
-    setSelectedAdminOrderCustomer(null);
-    setSelectedAdminOrderAddress(null);
-    setSelectedAdminOrderComments([]);
+    const fastRenderTimer = window.setTimeout(
+      () => setSelectedAdminOrderLoading(false),
+      ADMIN_FAST_RENDER_MS,
+    );
     try {
       const [orderResult, commentsResult] = await Promise.all([
         orderApi.getOrder(orderId),
@@ -202,30 +271,41 @@ export default function ProductAdminPage({
       setSelectedAdminOrderComments(
         Array.isArray(commentsResult) ? commentsResult : [],
       );
+      setSelectedAdminOrderLoading(false);
+      let nextCustomer = null;
+      let nextAddress = null;
       if (orderResult?.userId) {
         const [customerResult, addressesResult] = await Promise.allSettled([
           getUserById(orderResult.userId),
           getUserAddressesById(orderResult.userId),
         ]);
         if (customerResult.status === "fulfilled") {
+          nextCustomer = customerResult.value;
           setSelectedAdminOrderCustomer(customerResult.value);
         }
         if (addressesResult.status === "fulfilled") {
           const addresses = Array.isArray(addressesResult.value)
             ? addressesResult.value
             : [];
-          setSelectedAdminOrderAddress(
+          nextAddress =
             addresses.find(
               (address) => String(address.id) === String(orderResult.addressId),
-            ) || null,
-          );
+            ) || null;
+          setSelectedAdminOrderAddress(nextAddress);
         }
       }
+      writeAdminCache(cacheKey, {
+        order: orderResult,
+        comments: Array.isArray(commentsResult) ? commentsResult : [],
+        customer: nextCustomer,
+        address: nextAddress,
+      });
     } catch (error) {
       setSelectedAdminOrderError(
         error.message || "Không tải được chi tiết đơn hàng.",
       );
     } finally {
+      window.clearTimeout(fastRenderTimer);
       setSelectedAdminOrderLoading(false);
     }
   }, []);
@@ -267,7 +347,12 @@ export default function ProductAdminPage({
     setAdminOrderPage(0);
     loadAdminOrders(0);
     openAdminOrderDetail({ id: orderId });
-  }, [openedOrderId, selectedAdminOrderId, loadAdminOrders, openAdminOrderDetail]);
+  }, [
+    openedOrderId,
+    selectedAdminOrderId,
+    loadAdminOrders,
+    openAdminOrderDetail,
+  ]);
 
   const stats = useMemo(() => {
     const outOfStock = products.filter(
@@ -287,9 +372,15 @@ export default function ProductAdminPage({
   }, [categories, pagination.totalElements, products]);
 
   const loadCategories = useCallback(async () => {
+    const cached = readAdminCache("categories");
+    if (cached) {
+      setCategories(Array.isArray(cached) ? cached : []);
+    }
     try {
       const data = await getCategories();
-      setCategories(Array.isArray(data) ? data : []);
+      const nextCategories = Array.isArray(data) ? data : [];
+      setCategories(nextCategories);
+      writeAdminCache("categories", nextCategories);
     } catch (error) {
       showNotification("error", error.message || "Không tải được danh mục.");
     }
@@ -298,11 +389,21 @@ export default function ProductAdminPage({
   const loadProducts = useCallback(
     async (page = 0, options = {}) => {
       const append = Boolean(options.append && page > 0);
+      const cacheKey = getProductCacheKey(page, pagination.size, filter);
+      const cached = !append ? readAdminCache(cacheKey) : null;
+      if (cached) {
+        setProducts(Array.isArray(cached.products) ? cached.products : []);
+        setPagination((prev) => ({ ...prev, ...cached.pagination }));
+        setIsLoading(false);
+      }
       if (append) {
         setIsLoadingMoreProducts(true);
-      } else {
+      } else if (!cached) {
         setIsLoading(true);
       }
+      const fastRenderTimer = !append
+        ? window.setTimeout(() => setIsLoading(false), ADMIN_FAST_RENDER_MS)
+        : null;
       try {
         const response = await getProducts({
           page,
@@ -328,18 +429,28 @@ export default function ProductAdminPage({
           });
           return merged;
         });
-        setPagination((prev) => ({
-          ...prev,
+        const nextPagination = {
           page: response.number || page,
           totalPages: response.totalPages || 1,
           totalElements: response.totalElements || 0,
+        };
+        setPagination((prev) => ({
+          ...prev,
+          ...nextPagination,
         }));
+        if (!append) {
+          writeAdminCache(cacheKey, {
+            products: nextProducts,
+            pagination: nextPagination,
+          });
+        }
       } catch (error) {
         showNotification("error", error.message || "Không tải được sản phẩm.");
       } finally {
         if (append) {
           setIsLoadingMoreProducts(false);
         } else {
+          if (fastRenderTimer) window.clearTimeout(fastRenderTimer);
           setIsLoading(false);
         }
       }
@@ -357,8 +468,12 @@ export default function ProductAdminPage({
 
   useEffect(() => {
     function handleAgentExecuted(event) {
-      const tools = Array.isArray(event.detail?.tools) ? event.detail.tools : [];
-      const changedProducts = tools.some((tool) => PRODUCT_AGENT_TOOLS.has(tool));
+      const tools = Array.isArray(event.detail?.tools)
+        ? event.detail.tools
+        : [];
+      const changedProducts = tools.some((tool) =>
+        PRODUCT_AGENT_TOOLS.has(tool),
+      );
       const changedOrders = tools.some((tool) => ORDER_AGENT_TOOLS.has(tool));
 
       if (changedProducts) {
@@ -671,7 +786,10 @@ export default function ProductAdminPage({
       !form.purchasePrice ||
       !form.stockQuantity
     ) {
-      showNotification("error", "Vui lòng nhập tên, giá bán, giá nhập và tồn kho.");
+      showNotification(
+        "error",
+        "Vui lòng nhập tên, giá bán, giá nhập và tồn kho.",
+      );
       return;
     }
 
@@ -764,9 +882,20 @@ export default function ProductAdminPage({
 
   async function openProductDetail(product) {
     setSelectedDetailProduct(product);
-    setDetailProductLoading(true);
+    const cacheKey = `product-detail:${product.id}`;
+    const cached = readAdminCache(cacheKey);
+    if (cached) {
+      setDetailProductData(cached);
+      setDetailProductLoading(false);
+    } else {
+      setDetailProductLoading(true);
+    }
     setDetailProductError("");
-    setDetailProductData(null);
+    if (!cached) setDetailProductData(null);
+    const fastRenderTimer = window.setTimeout(
+      () => setDetailProductLoading(false),
+      ADMIN_FAST_RENDER_MS,
+    );
 
     try {
       const [productResult, detailWithCommentsResult, ordersExistResult] =
@@ -805,6 +934,7 @@ export default function ProductAdminPage({
       };
 
       setDetailProductData(detailPayload);
+      writeAdminCache(cacheKey, detailPayload);
       if (
         productResult.status === "rejected" &&
         detailWithCommentsResult.status === "rejected"
@@ -820,6 +950,7 @@ export default function ProductAdminPage({
         error.message || "Không tải được chi tiết sản phẩm.",
       );
     } finally {
+      window.clearTimeout(fastRenderTimer);
       setDetailProductLoading(false);
     }
   }
@@ -1996,9 +2127,7 @@ function AdminOrderDetailModal({
               <div className="grid gap-4 sm:grid-cols-2">
                 <InfoCard
                   label="Ngày tạo"
-                  value={
-                    formatDateTime(order.createdAt)
-                  }
+                  value={formatDateTime(order.createdAt)}
                 />
                 <InfoCard
                   label="Khách hàng"
@@ -2523,7 +2652,8 @@ function ProductDetailAdminModal({
                   {currencyFormatter.format(productData.price || 0)}
                 </p>
                 <p className="mt-2 text-sm font-semibold text-slate-600">
-                  Giá nhập: {currencyFormatter.format(productData.purchasePrice || 0)}
+                  Giá nhập:{" "}
+                  {currencyFormatter.format(productData.purchasePrice || 0)}
                 </p>
               </div>
               <div className="space-y-1 text-right">
@@ -2773,12 +2903,15 @@ function Modal({ children, onClose, maxWidth }) {
   return (
     <div
       className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-[#191b23]/70 px-4 py-6 backdrop-blur-sm"
-      onClick={onClose}
+      onMouseDown={(event) => {
+        // Only close when the interaction starts on the backdrop itself.
+        if (event.target === event.currentTarget) onClose?.();
+      }}
       role="presentation"
     >
       <div
         className={`my-auto w-full ${maxWidth} overflow-hidden rounded-2xl border border-white/60 bg-white shadow-2xl`}
-        onClick={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
         role="presentation"
       >
         {children}

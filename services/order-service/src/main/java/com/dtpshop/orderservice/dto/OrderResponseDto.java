@@ -28,6 +28,7 @@ public class OrderResponseDto {
     private LocalDateTime completedAt;
     private LocalDateTime cancelledAt;
     private List<CartItemDto> items;
+    private BigDecimal grossProfit;
 
     public BigDecimal getTotalAmount() {
         return finalAmount;

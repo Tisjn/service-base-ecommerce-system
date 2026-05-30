@@ -23,6 +23,42 @@ const statusLabels = {
   DELETED: "Đã xóa",
 };
 
+const CUSTOMER_FAST_RENDER_MS = 900;
+const CUSTOMER_CACHE_TTL_MS = 2 * 60 * 1000;
+const CUSTOMER_CACHE_PREFIX = "dtpshop.admin.customers.";
+
+function readCustomerCache(key) {
+  if (typeof window === "undefined") return null;
+  try {
+    const storageKey = `${CUSTOMER_CACHE_PREFIX}${key}`;
+    const raw = window.sessionStorage.getItem(storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (
+      !parsed?.savedAt ||
+      Date.now() - parsed.savedAt > CUSTOMER_CACHE_TTL_MS
+    ) {
+      window.sessionStorage.removeItem(storageKey);
+      return null;
+    }
+    return parsed.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCustomerCache(key, value) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      `${CUSTOMER_CACHE_PREFIX}${key}`,
+      JSON.stringify({ savedAt: Date.now(), value }),
+    );
+  } catch {
+    // Fresh API data is still rendered when sessionStorage is unavailable.
+  }
+}
+
 function getErrorMessage(error, fallback) {
   return (
     error?.response?.data?.message ||
@@ -123,33 +159,60 @@ export default function AdminCustomersPage({ currentUser }) {
   }
 
   async function loadUsers() {
-    setLoading(true);
+    const cached = readCustomerCache("list");
+    if (cached) {
+      setUsers(Array.isArray(cached) ? cached : []);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+    const fastRenderTimer = window.setTimeout(
+      () => setLoading(false),
+      CUSTOMER_FAST_RENDER_MS,
+    );
     try {
       const data = await listUsers();
-      setUsers(Array.isArray(data) ? data : []);
+      const nextUsers = Array.isArray(data) ? data : [];
+      setUsers(nextUsers);
+      writeCustomerCache("list", nextUsers);
     } catch (error) {
       showNotification(
         "error",
         getErrorMessage(error, "Không tải được danh sách tài khoản."),
       );
     } finally {
+      window.clearTimeout(fastRenderTimer);
       setLoading(false);
     }
   }
 
   async function openUserDetail(userId) {
-    setDetailLoading(true);
+    const cacheKey = `detail:${userId}`;
+    const cached = readCustomerCache(cacheKey);
+    if (cached) {
+      setSelectedUser(cached);
+      setForm(buildForm(cached));
+      setDetailLoading(false);
+    } else {
+      setDetailLoading(true);
+    }
     setEditing(false);
+    const fastRenderTimer = window.setTimeout(
+      () => setDetailLoading(false),
+      CUSTOMER_FAST_RENDER_MS,
+    );
     try {
       const data = await getUserById(userId);
       setSelectedUser(data);
       setForm(buildForm(data));
+      writeCustomerCache(cacheKey, data);
     } catch (error) {
       showNotification(
         "error",
         getErrorMessage(error, "Không tải được chi tiết tài khoản."),
       );
     } finally {
+      window.clearTimeout(fastRenderTimer);
       setDetailLoading(false);
     }
   }

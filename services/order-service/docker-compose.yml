@@ -80,6 +80,7 @@ services:
       # Downstream services
       - PRODUCT_SERVICE_URL=http://host.docker.internal:3003
       - PAYMENT_SERVICE_URL=http://host.docker.internal:3005
+      - SERVICE_HTTP_READ_TIMEOUT_MS=15000
       # Application port
       - SERVER_PORT=3004
     depends_on:

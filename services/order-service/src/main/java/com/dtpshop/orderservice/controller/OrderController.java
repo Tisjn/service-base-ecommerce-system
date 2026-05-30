@@ -18,6 +18,7 @@ import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -308,7 +309,8 @@ public class OrderController {
         int safePage = page == null ? 0 : page;
         int safeSize = size == null ? 10 : size;
         if (safePage < 0 || safeSize < 1 || safeSize > 50) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "page must be >= 0 and size must be between 1 and 50");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "page must be >= 0 and size must be between 1 and 50");
         }
         Sort.Direction sortDirection = "asc".equalsIgnoreCase(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
         return PageRequest.of(safePage, safeSize, Sort.by(sortDirection, "createdAt"));
@@ -345,10 +347,26 @@ public class OrderController {
                 order.getUpdatedAt(),
                 order.getCompletedAt(),
                 order.getCancelledAt(),
-                items);
+                items,
+                calculateGrossProfit(order));
     }
 
     private CartItemDto itemToDto(OrderItem item) {
-        return new CartItemDto(item.getProductId(), item.getProductName(), item.getQuantity(), item.getPrice());
+        return new CartItemDto(item.getProductId(), item.getProductName(), item.getQuantity(), item.getPrice(),
+                item.getCostPrice());
+    }
+
+    private BigDecimal calculateGrossProfit(Order order) {
+        if (order == null || order.getItems() == null || order.getItems().isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        return order.getItems().stream()
+                .map(item -> {
+                    BigDecimal salePrice = item.getPrice() == null ? BigDecimal.ZERO : item.getPrice();
+                    BigDecimal costPrice = item.getCostPrice() == null ? BigDecimal.ZERO : item.getCostPrice();
+                    Integer quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+                    return salePrice.subtract(costPrice).multiply(BigDecimal.valueOf(quantity));
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 }

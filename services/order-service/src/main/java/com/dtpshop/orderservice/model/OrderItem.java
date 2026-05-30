@@ -40,6 +40,9 @@ public class OrderItem {
     @Column(nullable = false)
     private BigDecimal price;
 
+    @Column(name = "cost_price")
+    private BigDecimal costPrice;
+
     @Column(nullable = false)
     private BigDecimal subtotal;
 }

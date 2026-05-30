@@ -13,6 +13,7 @@ public class ProductSnapshotDto {
     private String name;
     private String description;
     private BigDecimal price;
+    private BigDecimal purchasePrice;
     private Integer stockQuantity;
     private String imageUrl;
     private List<String> descriptionImageUrls = new ArrayList<>();

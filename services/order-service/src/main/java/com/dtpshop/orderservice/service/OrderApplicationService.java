@@ -4,6 +4,7 @@ import com.dtpshop.orderservice.client.ProductServiceClient;
 import com.dtpshop.orderservice.dto.CartItemDto;
 import com.dtpshop.orderservice.dto.OrderRequestDto;
 import com.dtpshop.orderservice.dto.OrderResponseDto;
+import com.dtpshop.orderservice.dto.ProductSnapshotDto;
 import com.dtpshop.orderservice.event.OrderCancelledEvent;
 import com.dtpshop.orderservice.event.OrderCreatedEvent;
 import com.dtpshop.orderservice.model.Order;
@@ -173,10 +174,14 @@ public class OrderApplicationService {
 
     private OrderItem toOrderItem(Order order, CartItemDto cartItem) {
         OrderItem item = new OrderItem();
+        ProductSnapshotDto productSnapshot = productServiceClient == null
+                ? null
+                : productServiceClient.getProduct(cartItem.getProductId());
         item.setProductId(cartItem.getProductId());
         item.setProductName(cartItem.getProductName());
         item.setQuantity(cartItem.getQuantity());
         item.setPrice(cartItem.getPrice());
+        item.setCostPrice(resolveCostPrice(cartItem, productSnapshot));
         item.setSubtotal(cartItem.getSubtotal());
         item.setOrder(order);
         return item;
@@ -239,14 +244,39 @@ public class OrderApplicationService {
                 order.getPaymentStatus(), order.getPaymentUrl(),
                 order.getCreatedAt(), order.getUpdatedAt(),
                 order.getCompletedAt(), order.getCancelledAt(),
-                items);
+                items,
+                calculateGrossProfit(order));
     }
 
     private List<CartItemDto> toCartItems(Order order) {
         return order.getItems().stream()
                 .map(item -> new CartItemDto(item.getProductId(), item.getProductName(), item.getQuantity(),
-                        item.getPrice()))
+                        item.getPrice(), item.getCostPrice()))
                 .collect(Collectors.toList());
+    }
+
+    private BigDecimal resolveCostPrice(CartItemDto cartItem, ProductSnapshotDto productSnapshot) {
+        if (productSnapshot != null && productSnapshot.getPurchasePrice() != null) {
+            return productSnapshot.getPurchasePrice();
+        }
+        if (cartItem.getCostPrice() != null) {
+            return cartItem.getCostPrice();
+        }
+        return BigDecimal.ZERO;
+    }
+
+    private BigDecimal calculateGrossProfit(Order order) {
+        if (order == null || order.getItems() == null || order.getItems().isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        return order.getItems().stream()
+                .map(item -> {
+                    BigDecimal salePrice = item.getPrice() == null ? BigDecimal.ZERO : item.getPrice();
+                    BigDecimal costPrice = item.getCostPrice() == null ? BigDecimal.ZERO : item.getCostPrice();
+                    Integer quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+                    return salePrice.subtract(costPrice).multiply(BigDecimal.valueOf(quantity));
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private Order findOrder(Long orderId) {

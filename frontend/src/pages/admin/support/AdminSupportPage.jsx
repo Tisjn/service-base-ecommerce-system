@@ -12,6 +12,39 @@ import {
 } from "../../../api/chatApi";
 import BrandLogo from "../../../components/BrandLogo.jsx";
 
+const SUPPORT_FAST_RENDER_MS = 900;
+const SUPPORT_CACHE_TTL_MS = 2 * 60 * 1000;
+const SUPPORT_CACHE_PREFIX = "dtpshop.admin.support.";
+
+function readSupportCache(key) {
+  if (typeof window === "undefined") return null;
+  try {
+    const storageKey = `${SUPPORT_CACHE_PREFIX}${key}`;
+    const raw = window.sessionStorage.getItem(storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.savedAt || Date.now() - parsed.savedAt > SUPPORT_CACHE_TTL_MS) {
+      window.sessionStorage.removeItem(storageKey);
+      return null;
+    }
+    return parsed.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSupportCache(key, value) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      `${SUPPORT_CACHE_PREFIX}${key}`,
+      JSON.stringify({ savedAt: Date.now(), value }),
+    );
+  } catch {
+    // Fresh API data is still rendered when sessionStorage is unavailable.
+  }
+}
+
 function messageKey(message) {
   return message?.id || `${message?.senderId}-${message?.timestamp}`;
 }
@@ -34,6 +67,24 @@ function isImageMessage(message) {
     mimeType.startsWith("image/") ||
     /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(fileUrl)
   );
+}
+
+function normalizeRooms(data) {
+  const nextRooms = Array.isArray(data) ? data : [];
+  const sorted = nextRooms
+    .slice()
+    .sort((a, b) =>
+      String(b.updatedAt || b.createdAt).localeCompare(
+        String(a.updatedAt || a.createdAt),
+      ),
+    );
+  const byCustomer = new Map();
+  for (const room of sorted) {
+    if (!byCustomer.has(String(room.customerId))) {
+      byCustomer.set(String(room.customerId), room);
+    }
+  }
+  return Array.from(byCustomer.values());
 }
 
 export default function AdminSupportPage({ user }) {
@@ -75,28 +126,29 @@ export default function AdminSupportPage({ user }) {
   );
 
   const loadRooms = useCallback(async () => {
-    setLoadingRooms(true);
+    const cacheKey = `rooms:${statusFilter || "all"}`;
+    const cached = readSupportCache(cacheKey);
+    if (cached) {
+      const cachedRooms = normalizeRooms(cached);
+      setRooms(cachedRooms);
+      if (!selectedRoomId && cachedRooms[0]?.roomId) {
+        setSelectedRoomId(cachedRooms[0].roomId);
+      }
+      setLoadingRooms(false);
+    } else {
+      setLoadingRooms(true);
+    }
+    const fastRenderTimer = window.setTimeout(
+      () => setLoadingRooms(false),
+      SUPPORT_FAST_RENDER_MS,
+    );
     try {
       const data = await getChatRooms(statusFilter || undefined);
-      const nextRooms = Array.isArray(data) ? data : [];
-      // keep only one room per customer (most recently updated)
-      const sorted = nextRooms
-        .slice()
-        .sort((a, b) =>
-          String(b.updatedAt || b.createdAt).localeCompare(
-            String(a.updatedAt || a.createdAt),
-          ),
-        );
-      const byCustomer = new Map();
-      for (const r of sorted) {
-        if (!byCustomer.has(String(r.customerId))) {
-          byCustomer.set(String(r.customerId), r);
-        }
-      }
-      const uniqueRooms = Array.from(byCustomer.values());
+      const uniqueRooms = normalizeRooms(data);
       setRooms(uniqueRooms);
-      if (!selectedRoomId && nextRooms[0]?.roomId) {
-        setSelectedRoomId(nextRooms[0].roomId);
+      writeSupportCache(cacheKey, uniqueRooms);
+      if (!selectedRoomId && uniqueRooms[0]?.roomId) {
+        setSelectedRoomId(uniqueRooms[0].roomId);
       }
     } catch (error) {
       setNotice(
@@ -105,6 +157,7 @@ export default function AdminSupportPage({ user }) {
           "Không tải được phòng chat",
       );
     } finally {
+      window.clearTimeout(fastRenderTimer);
       setLoadingRooms(false);
     }
   }, [selectedRoomId, statusFilter]);
@@ -231,17 +284,32 @@ export default function AdminSupportPage({ user }) {
     let cancelled = false;
 
     async function loadMessages() {
-      setLoadingMessages(true);
-      // Clear previous messages immediately to avoid showing the wrong room's
-      // messages while the new room history loads.
-      setMessages([]);
+      const cacheKey = `messages:${selectedRoomId}`;
+      const cached = readSupportCache(cacheKey);
+      if (cached) {
+        setMessages(Array.isArray(cached) ? cached : []);
+        setLoadingMessages(false);
+      } else {
+        setLoadingMessages(true);
+        // Clear previous messages immediately to avoid showing the wrong room's
+        // messages while the new room history loads.
+        setMessages([]);
+      }
+      const fastRenderTimer = window.setTimeout(
+        () => setLoadingMessages(false),
+        SUPPORT_FAST_RENDER_MS,
+      );
       try {
         await emitChatEventNoAck(socketRef.current, "join_room", {
           roomId: selectedRoomId,
         });
         const data = await getRoomMessages(selectedRoomId);
         if (!cancelled) {
-          setMessages(data.messages || []);
+          const nextMessages = Array.isArray(data.messages)
+            ? data.messages
+            : [];
+          setMessages(nextMessages);
+          writeSupportCache(cacheKey, nextMessages);
           setNotice("");
         }
       } catch (error) {
@@ -253,6 +321,7 @@ export default function AdminSupportPage({ user }) {
           );
         }
       } finally {
+        window.clearTimeout(fastRenderTimer);
         if (!cancelled) {
           setLoadingMessages(false);
         }

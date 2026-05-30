@@ -7,6 +7,42 @@ const currencyFormatter = new Intl.NumberFormat("vi-VN", {
   maximumFractionDigits: 0,
 });
 
+const PRODUCT_DETAIL_FAST_RENDER_MS = 900;
+const PRODUCT_DETAIL_CACHE_TTL_MS = 2 * 60 * 1000;
+const PRODUCT_DETAIL_CACHE_PREFIX = "dtpshop.admin.productDetail.";
+
+function readProductDetailCache(productId) {
+  if (typeof window === "undefined") return null;
+  try {
+    const storageKey = `${PRODUCT_DETAIL_CACHE_PREFIX}${productId}`;
+    const raw = window.sessionStorage.getItem(storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (
+      !parsed?.savedAt ||
+      Date.now() - parsed.savedAt > PRODUCT_DETAIL_CACHE_TTL_MS
+    ) {
+      window.sessionStorage.removeItem(storageKey);
+      return null;
+    }
+    return parsed.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writeProductDetailCache(productId, value) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      `${PRODUCT_DETAIL_CACHE_PREFIX}${productId}`,
+      JSON.stringify({ savedAt: Date.now(), value }),
+    );
+  } catch {
+    // Fresh API data is still rendered when sessionStorage is unavailable.
+  }
+}
+
 function formatDateTime(date) {
   if (!date) return "";
   try {
@@ -47,8 +83,19 @@ export default function ProductDetailModal({ productId, onClose }) {
     if (!productId) return;
 
     const loadDetail = async () => {
-      setLoading(true);
+      const cached = readProductDetailCache(productId);
+      if (cached) {
+        setDetail(cached.detail || null);
+        setHasOrders(cached.hasOrders ?? null);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
       setError(null);
+      const fastRenderTimer = window.setTimeout(
+        () => setLoading(false),
+        PRODUCT_DETAIL_FAST_RENDER_MS,
+      );
       try {
         const [detailData, orderExists] = await Promise.all([
           orderApi.getProductDetailWithComments(productId),
@@ -56,10 +103,15 @@ export default function ProductDetailModal({ productId, onClose }) {
         ]);
         setDetail(detailData);
         setHasOrders(orderExists);
+        writeProductDetailCache(productId, {
+          detail: detailData,
+          hasOrders: orderExists,
+        });
       } catch (err) {
         setError(err.message || "Không thể tải chi tiết sản phẩm");
         console.error("Error loading product detail:", err);
       } finally {
+        window.clearTimeout(fastRenderTimer);
         setLoading(false);
       }
     };
