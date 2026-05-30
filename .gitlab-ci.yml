@@ -1,0 +1,153 @@
+# Sample GitLab CI optimized for monorepo with frontend (Node/Vite) and backend services
+# Features: caching, artifacts reuse, parallel matrix for services, rules to only run relevant jobs,
+# docker image build with registry cache, and faster Java/Node builds.
+
+stages:
+  - install
+  - test
+  - build
+  - docker
+
+variables:
+  DOCKER_TLS_CERTDIR: ""
+  MAVEN_OPTS: "-DskipTests"
+
+# Required CI/CD variables (configure in GitLab > Settings > CI/CD > Variables):
+# - CI_REGISTRY (auto-provided by GitLab for its Container Registry)
+# - CI_REGISTRY_USER (auto-provided by GitLab)
+# - CI_REGISTRY_PASSWORD (auto-provided by GitLab) OR create a Personal Access Token / Deploy Token
+# - CI_REGISTRY_IMAGE (optional: project image path)
+# Mark registry credentials as "protected" and "masked" where appropriate.
+
+# Global cache (keys scoped by branch to avoid cross-branch conflicts)
+cache:
+  key: "${CI_COMMIT_REF_SLUG}"
+  paths:
+    - frontend/node_modules/
+    - .m2/repository/
+
+########################################
+# Frontend pipeline (Node / Vite)
+########################################
+frontend:install:
+  image: node:18
+  stage: install
+  script:
+    - cd frontend
+    - npm ci --prefer-offline --no-audit --progress=false
+  cache:
+    key: "frontend-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - frontend/node_modules/
+  rules:
+    - changes:
+        - frontend/**
+
+frontend:test:
+  image: node:18
+  stage: test
+  needs: [frontend:install]
+  script:
+    - cd frontend
+    - npm ci --prefer-offline --no-audit --progress=false
+    - npm test --if-present
+  artifacts:
+    when: always
+    reports:
+      junit: frontend/test-results.xml
+  rules:
+    - changes:
+        - frontend/**
+
+frontend:build:
+  image: node:18
+  stage: build
+  needs: [frontend:test]
+  script:
+    - cd frontend
+    - npm ci --prefer-offline --no-audit --progress=false
+    - npm run build
+  artifacts:
+    paths:
+      - frontend/dist
+  rules:
+    - changes:
+        - frontend/**
+
+########################################
+# Backend: Node services (parallel matrix)
+########################################
+# Example uses GitLab's parallel:matrix to test services in parallel. Adjust SERVICE list to your services.
+backend:node_tests:
+  image: node:18
+  stage: test
+  parallel:
+    matrix:
+      - SERVICE: services/auth-service
+      - SERVICE: services/product-service
+      - SERVICE: services/order-service
+  script:
+    - echo "Running tests for $SERVICE"
+    - if [ ! -d "$SERVICE" ]; then echo "Service $SERVICE not found, skipping"; exit 0; fi
+    - cd $SERVICE
+    - if [ ! -f package.json ]; then echo "No package.json, skipping"; exit 0; fi
+    - CHANGED=$(git diff --name-only $CI_COMMIT_BEFORE_SHA $CI_COMMIT_SHA || true)
+    - echo "$CHANGED" | grep -q "^$SERVICE/" || { echo "No changes in $SERVICE, skipping tests"; exit 0; }
+    - npm ci --prefer-offline --no-audit --progress=false
+    - npm test --if-present
+  cache:
+    paths:
+      - $SERVICE/node_modules/
+  rules:
+    - changes:
+        - services/**
+
+########################################
+# Backend: Java example (Maven)
+########################################
+backend:java_build:
+  image: maven:3.8.8-jdk-17
+  stage: build
+  script:
+    - cd services/ai-service
+    - mvn -T 1C -DskipTests package
+  cache:
+    key: "maven-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - .m2/repository/
+  rules:
+    - changes:
+        - services/ai-service/**
+
+########################################
+# Docker build & push (uses Docker-in-Docker)
+########################################
+docker:build_and_push:
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  stage: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+  script:
+    - |
+      # build frontend image with registry cache to speed layers
+      if [ -f frontend/Dockerfile ]; then
+        docker build --pull --cache-from $CI_REGISTRY_IMAGE:cache -t $CI_REGISTRY_IMAGE:frontend-$CI_COMMIT_SHORT_SHA -f frontend/Dockerfile frontend
+        docker push $CI_REGISTRY_IMAGE:frontend-$CI_COMMIT_SHORT_SHA
+      else
+        echo "No frontend Dockerfile found, skipping image build"
+      fi
+    - |
+      # tag cache image for future pipelines
+      docker tag $CI_REGISTRY_IMAGE:frontend-$CI_COMMIT_SHORT_SHA $CI_REGISTRY_IMAGE:cache || true
+      docker push $CI_REGISTRY_IMAGE:cache || true
+  rules:
+    - changes:
+        - frontend/**
+        - services/**
+
+# End of CI
