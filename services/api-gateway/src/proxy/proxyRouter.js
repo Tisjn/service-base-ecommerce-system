@@ -55,6 +55,12 @@ function createProxy(target, options = {}) {
     onProxyReqWs(proxyReq) {
       proxyReq.removeHeader("origin");
     },
+    onProxyRes(proxyRes) {
+      delete proxyRes.headers["access-control-allow-origin"];
+      delete proxyRes.headers["access-control-allow-credentials"];
+      delete proxyRes.headers["access-control-allow-methods"];
+      delete proxyRes.headers["access-control-allow-headers"];
+    },
     onError(error, req, res) {
       logger.error(
         `Proxy error ${req.method} ${req.originalUrl} -> ${target}: ${error.message}`,
