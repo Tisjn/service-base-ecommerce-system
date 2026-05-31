@@ -43,6 +43,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: product-service
+    env_file:
+      - .env
     ports:
       - "3003:3003"
     environment:
@@ -71,10 +73,8 @@ services:
       - SPRING_RABBITMQ_USERNAME=guest
       - SPRING_RABBITMQ_PASSWORD=guest
       - ORDER_SERVICE_URL=http://host.docker.internal:3004
-      - AWS_REGION=us-east-1
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - S3_BUCKET_NAME=s3-dynamodb-phuc
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-s3-dynamodb-phuc}
       - SERVER_PORT=3003
       - JWT_SECRET=${JWT_SECRET:-0a8e7a473e35d1080204701f57ba0cb86641689c11998b16662f96be329c2ac3}
     depends_on:
