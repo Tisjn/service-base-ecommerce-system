@@ -52,6 +52,9 @@ function createProxy(target, options = {}) {
     onProxyReq(proxyReq) {
       proxyReq.removeHeader("origin");
     },
+    onProxyReqWs(proxyReq) {
+      proxyReq.removeHeader("origin");
+    },
     onError(error, req, res) {
       logger.error(
         `Proxy error ${req.method} ${req.originalUrl} -> ${target}: ${error.message}`,
@@ -196,12 +199,18 @@ function createSocketProxy() {
     target: config.orderServiceUrl,
     changeOrigin: true,
     ws: true,
+    onProxyReqWs(proxyReq) {
+      proxyReq.removeHeader("origin");
+    },
   });
 
   const chatSocketProxy = createProxyMiddleware({
     target: config.chatServiceUrl,
     changeOrigin: true,
     ws: true,
+    onProxyReqWs(proxyReq) {
+      proxyReq.removeHeader("origin");
+    },
   });
 
   return {

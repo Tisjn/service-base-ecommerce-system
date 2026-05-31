@@ -61,6 +61,16 @@ async function requestWithFallback(method, path, accessToken, data) {
     headers: buildUserHeaders(accessToken),
   };
 
+  if (gatewayUrl) {
+    const response = await gatewayUserApi.request({
+      method,
+      url: path,
+      data,
+      ...config,
+    });
+    return response.data;
+  }
+
   try {
     const response = await directUserApi.request({
       method,
