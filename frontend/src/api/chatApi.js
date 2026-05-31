@@ -9,6 +9,12 @@ const CHAT_API_BASE_URL = `${CHAT_SERVICE_URL.replace(/\/+$/, "")}/chat`;
 const CHAT_SOCKET_URL =
   import.meta.env.VITE_CHAT_SOCKET_URL || resolveSocketOrigin(CHAT_SERVICE_URL);
 const CHAT_SOCKET_PATH = import.meta.env.VITE_CHAT_SOCKET_PATH || "/socket.io";
+const CHAT_SOCKET_TRANSPORTS = (
+  import.meta.env.VITE_CHAT_SOCKET_TRANSPORTS || "polling"
+)
+  .split(",")
+  .map((transport) => transport.trim())
+  .filter(Boolean);
 // All socket traffic should go through the API gateway (VITE_API_GATEWAY_URL)
 
 function resolveSocketOrigin(value) {
@@ -189,7 +195,7 @@ export function createChatSocket() {
         socket = io(CHAT_SOCKET_URL, {
           auth: { token },
           path: CHAT_SOCKET_PATH,
-          transports: ["polling", "websocket"],
+          transports: CHAT_SOCKET_TRANSPORTS,
           autoConnect: false,
         });
 
