@@ -20,6 +20,8 @@ server.on("upgrade", (req, socket, head) => {
   socketProxy.upgrade(req, socket, head);
 });
 
-server.listen(config.port, () => {
-  logger.info(`api-gateway listening on port ${config.port}`);
+const host = process.env.HOST || "0.0.0.0";
+
+server.listen(config.port, host, () => {
+  logger.info(`api-gateway listening on ${host}:${config.port}`);
 });

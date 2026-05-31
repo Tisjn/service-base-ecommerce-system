@@ -173,6 +173,15 @@ function setupProxyRoutes(app) {
   );
   app.use(orderApiPrefixes, requireOrderAuth, orderProxy);
   app.use(["/orders", "/admin/products"], requireOrderAuth, orderProxy);
+  app.use(
+    [
+      "/payments/return/momo",
+      "/api/payments/return/momo",
+      "/payments/webhook/momo",
+      "/api/payments/webhook/momo",
+    ],
+    paymentProxy,
+  );
   app.use(["/payments", "/api/payments"], verifyJWT, paymentProxy);
   app.use(aiApiPrefixes, verifyJWT, aiProxy);
   app.use(["/ai"], verifyJWT, aiProxy);
