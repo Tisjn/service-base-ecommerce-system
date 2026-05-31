@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import SockJS from "sockjs-client";
 
 const NEW_ORDER_TOPIC = "/topic/new_order";
+const DEFAULT_SOCKJS_TRANSPORTS = ["xhr-polling"];
 
 function parseStompBody(frame) {
   const [, body = ""] = frame.split("\n\n");
@@ -24,6 +25,10 @@ export default function useOrderSocket(onMessage, options = {}) {
       import.meta.env.VITE_API_GATEWAY_URL ||
       import.meta.env.VITE_API_URL ||
       "http://localhost:8081";
+    const transports = (import.meta.env.VITE_ORDER_WS_TRANSPORTS || "")
+      .split(",")
+      .map((transport) => transport.trim())
+      .filter(Boolean);
 
     let sock;
     let connected = false;
@@ -42,7 +47,9 @@ export default function useOrderSocket(onMessage, options = {}) {
     }
 
     function connect() {
-      sock = new SockJS(`${gateway.replace(/\/$/, "")}/ws`);
+      sock = new SockJS(`${gateway.replace(/\/$/, "")}/ws`, null, {
+        transports: transports.length > 0 ? transports : DEFAULT_SOCKJS_TRANSPORTS,
+      });
 
       sock.onopen = () => {
         sendFrame("CONNECT\naccept-version:1.2\nheart-beat:10000,10000\n\n\u0000");
